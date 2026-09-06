@@ -37,20 +37,12 @@ function sendMissingImage(response) {
 }
 
 function portableLibrary(library) {
-  const portableWarning = (warning) => ({
-    ...warning,
-    path: warning?.path && path.isAbsolute(warning.path) ? path.basename(warning.path) : warning?.path ?? null,
-    relatedPaths: (warning?.relatedPaths ?? []).map((item) => path.isAbsolute(item) ? path.basename(item) : item)
-  });
+  const { warnings, errors, ...data } = library;
   return {
-    ...library,
-    warnings: (library?.warnings ?? []).map(portableWarning),
-    episodes: Object.fromEntries(Object.entries(library?.episodes ?? {}).map(([episodeId, episode]) => [episodeId, {
+    ...data,
+    episodes: Object.fromEntries(Object.entries(library?.episodes ?? {}).map(([episodeId, { warnings, errors, source, ...episode }]) => [episodeId, {
       ...episode,
-      source: null,
-      warnings: (episode.warnings ?? []).map(portableWarning),
-      errors: (episode.errors ?? []).map(portableWarning),
-      files: (episode.files ?? []).map(({ absolutePath, source, ...file }) => file)
+      files: (episode.files ?? []).map(({ absolutePath, source, warnings, errors, ...file }) => file)
     }]))
   };
 }

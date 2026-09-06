@@ -91,6 +91,44 @@ test('collection API rejects URL memberships and permits removing legacy missing
   }
 });
 
+test('JSON export omits diagnostics and local source paths without changing stored diagnostics', async () => {
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'atp-export-privacy-'));
+  const config = await resolveWorkspaceConfig({ workspace, host: '127.0.0.1', port: 0 });
+  const diagnostic = { type: 'fixture', message: 'Cannot read C:\\PrivateUser\\library\\image.png or /home/private/library/image.png', path: 'C:\\PrivateUser\\library', relatedPaths: ['/home/private/library'], details: { source: 'C:\\PrivateUser\\library' } };
+  const store = storageFor(config.databasePath);
+  store.write('library', {
+    episodes: { '20260101': { source: 'C:\\PrivateUser\\library', layout: 'folder', warnings: [diagnostic], errors: [diagnostic], variants: { a: [1] }, files: [{ name: '20260101_a1.png', relativePath: 'Archive/20260101/20260101_a1.png', absolutePath: 'C:\\PrivateUser\\library\\20260101_a1.png', source: 'C:\\PrivateUser\\library', assignmentToken: 'a1', assignments: [{ variant: 'a', pageNumber: 1 }] }] } },
+    warnings: [diagnostic]
+  });
+  const server = await startServer(config);
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/export/json`, { method: 'POST' });
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    const serialized = JSON.stringify(payload.export);
+    for (const privateText of ['PrivateUser', '/home/private', 'Cannot read']) assert.ok(!serialized.includes(privateText));
+    const check = value => {
+      if (!value || typeof value !== 'object') return;
+      for (const [key, child] of Object.entries(value)) {
+        assert.ok(!['warnings', 'errors', 'absolutePath', 'source'].includes(key), key);
+        check(child);
+      }
+    };
+    check(payload.export.library);
+    const episode = payload.export.library.episodes['20260101'];
+    assert.equal(episode.files[0].relativePath, 'Archive/20260101/20260101_a1.png');
+    assert.deepEqual(episode.files[0].assignments, [{ variant: 'a', pageNumber: 1 }]);
+    const stored = store.read('library');
+    assert.deepEqual(stored.warnings, [diagnostic]);
+    assert.deepEqual(stored.episodes['20260101'].warnings, [diagnostic]);
+    assert.deepEqual(stored.episodes['20260101'].errors, [diagnostic]);
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test('JSON export contains library, tags, and variants instead of an arrangement plan', async () => {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'atp-comic-export-'));
   const config = await resolveWorkspaceConfig({ workspace, host: '127.0.0.1', port: 0 });

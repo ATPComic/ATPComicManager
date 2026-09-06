@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue';
-import { mdiAlertCircleOutline, mdiCheck, mdiFolderCogOutline, mdiFolderRefreshOutline, mdiTuneVariant } from '../icons.js';
+import { mdiAlertCircleOutline, mdiCheck, mdiFileImportOutline, mdiFolderCogOutline, mdiFolderRefreshOutline, mdiTuneVariant } from '../icons.js';
 import { t } from '../../../public/i18n.js';
 import MdiIcon from './MdiIcon.vue';
 
@@ -10,7 +10,7 @@ const props = defineProps({
   libraryLocation: { type: String, default: '' }
 });
 
-const emit = defineEmits(['issues', 'recognition', 'scan']);
+const emit = defineEmits(['import-json', 'issues', 'recognition', 'scan']);
 const open = ref(false);
 const choosing = ref(false);
 const applying = ref(false);
@@ -100,6 +100,9 @@ onMounted(async () => {
           </var-button>
         </div>
         <div class="library-utility-actions">
+          <var-button text :disabled="!!busyAction" :title="t('importJsonSupporting')" @click="open = false; emit('import-json')">
+            <MdiIcon :path="mdiFileImportOutline" />{{ t('importJson') }}
+          </var-button>
           <var-button text :loading="busyAction === 'scan'" :disabled="!!busyAction" @click="open = false; emit('scan')">
             <MdiIcon :path="mdiFolderRefreshOutline" />{{ t('scan') }}
           </var-button>

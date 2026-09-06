@@ -33,6 +33,23 @@ export function normalizeRecognitionState(input) {
   return { version: 1, rules, episodeDates, identityMarkers };
 }
 
+export function mergeRecognitionStates(current, incoming) {
+  const local = normalizeRecognitionState(current);
+  const shared = normalizeRecognitionState(incoming);
+  const seen = new Set();
+  const rules = [...local.rules, ...shared.rules].filter(rule => {
+    const key = JSON.stringify([rule.prefix, rule.suffix]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return normalizeRecognitionState({
+    rules,
+    episodeDates: { ...local.episodeDates, ...shared.episodeDates },
+    identityMarkers: [...local.identityMarkers, ...shared.identityMarkers]
+  });
+}
+
 export function matchesRecognitionRule(folderName, rules) {
   const name = String(folderName ?? '');
   return (rules ?? []).some((rule) => (

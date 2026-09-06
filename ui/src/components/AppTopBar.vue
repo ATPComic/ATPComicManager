@@ -4,7 +4,6 @@ import {
   mdiCodeJson,
   mdiExportVariant,
   mdiFileTreeOutline,
-  mdiFileImportOutline,
   mdiTagMultipleOutline,
   mdiTuneVariant
 } from '../icons.js';
@@ -50,7 +49,7 @@ function exportAction(name) {
     <nav class="top-actions">
       <var-button size="small" text @click="emit('variants')"><MdiIcon :path="mdiTuneVariant" />{{ t('manualVariants') }}</var-button>
       <var-button size="small" text @click="emit('tags')"><MdiIcon :path="mdiTagMultipleOutline" />{{ t('tags') }}</var-button>
-      <LibraryLocationControl :busy-action="busyAction" :issue-count="issueCount" :library-location="libraryLocation" @scan="emit('scan')" @issues="emit('issues')" @recognition="emit('recognition')" />
+      <LibraryLocationControl :busy-action="busyAction" :issue-count="issueCount" :library-location="libraryLocation" @scan="emit('scan')" @issues="emit('issues')" @recognition="emit('recognition')" @import-json="emit('import-json')" />
       <var-menu v-model:show="exportOpen" placement="bottom-end" :offset-y="8" popover-class="top-export-popover">
         <var-button size="small" type="primary" :loading="busyAction?.startsWith('export')" :disabled="!!busyAction" aria-haspopup="menu">
           <MdiIcon :path="mdiExportVariant" />{{ t('exportMenu') }}
@@ -64,10 +63,6 @@ function exportAction(name) {
             <var-button block text role="menuitem" @click="exportAction('export-reading')">
               <MdiIcon :path="mdiFileTreeOutline" />
               <span><strong>{{ t('exportReading') }}</strong><small>{{ t('exportReadingSupporting') }}</small></span>
-            </var-button>
-            <var-button block text role="menuitem" @click="exportAction('import-json')">
-              <MdiIcon :path="mdiFileImportOutline" />
-              <span><strong>{{ t('importJson') }}</strong><small>{{ t('importJsonSupporting') }}</small></span>
             </var-button>
           </div>
         </template>

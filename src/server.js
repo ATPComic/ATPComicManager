@@ -12,7 +12,7 @@ import { loadTagState, mergeTagStates, saveTagState } from './tag-store.js';
 import { getThumbnailPath } from './thumbnail-cache.js';
 import { loadVariantAssignments, saveVariantAssignments } from './variant-store.js';
 import { normalizeVariantAssignments } from '../public/variant-assignment-model.js';
-import { loadRecognitionState, saveRecognitionState } from './recognition-store.js';
+import { loadRecognitionState, saveRecognitionState, mergeRecognitionStates } from './recognition-store.js';
 import { loadSharedImport, normalizeSharedImport } from './shared-import-store.js';
 import { initializeStorage } from './storage/initialize.js';
 import { withDatabase } from './storage/database.js';
@@ -299,7 +299,8 @@ export async function startServer(config) {
         const library = await loadLibrary();
         const tags = await loadTagState(config.databasePath);
         const variants = await loadVariantAssignments(config.databasePath);
-        sendJson(response, 200, { ok: true, export: { library: portableLibrary(library), tags, variants } });
+        const recognition = await loadRecognitionState(config.databasePath);
+        sendJson(response, 200, { ok: true, export: { library: portableLibrary(library), tags, variants, recognition } });
         return;
       }
 
@@ -307,15 +308,15 @@ export async function startServer(config) {
         const imported = normalizeSharedImport(await readBody(request));
         const tags = mergeTagStates(await loadTagState(config.databasePath), imported.tags);
         const variants = mergeVariantStates(await loadVariantAssignments(config.databasePath), imported.variants);
-        const recognition = await loadRecognitionState(config.databasePath);
+        const recognition = mergeRecognitionStates(await loadRecognitionState(config.databasePath), imported.recognition);
         const library = mergeSharedLibrary(await scanWorkspace(config.workspaceRoot,config.archiveRoot,variants,recognition), imported.library);
         withDatabase(config.databasePath, db => db.transaction(() => {
           db.writeLibrary(imported.library,'shared'); db.meta('shared','1');
-          db.writeTags(tags); db.writeVariants(variants); db.writeLibrary(library);
+          db.writeTags(tags); db.writeVariants(variants); db.writeRecognition(recognition); db.writeLibrary(library);
         }));
         libraryCache = null;
         const missingCount = (library.warnings ?? []).filter((warning) => warning.type?.startsWith('missing-imported-')).length;
-        sendJson(response, 200, { ok: true, library, tags, variants, missingCount });
+        sendJson(response, 200, { ok: true, library, tags, variants, recognition, missingCount });
         return;
       }
 

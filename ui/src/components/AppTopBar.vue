@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue';
+import appIcon from '../../../design/atp-comic/icon.svg?url';
 import {
   mdiCodeJson,
   mdiExportVariant,
@@ -43,7 +44,7 @@ function exportAction(name) {
 <template>
   <header class="top-app-bar">
     <div class="brand-block">
-      <var-avatar size="26" color="#294a7a" text-color="#d8e2ff">ATP</var-avatar>
+      <img class="brand-icon" :src="appIcon" width="26" height="26" alt="" draggable="false">
       <h1>{{ t('appTitle') }}</h1>
     </div>
     <nav class="top-actions">

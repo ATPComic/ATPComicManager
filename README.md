@@ -10,10 +10,14 @@ A variant set is a group of artworks with a degree of continuity, in which indiv
 
 ## Download for Windows
 
-| Edition | Download |
+[Download the latest release](https://github.com/ATPComic/ATPComicManager/releases/latest) · [All releases](https://github.com/ATPComic/ATPComicManager/releases)
+
+Choose a file under **Assets**:
+
+| Edition | File |
 | --- | --- |
-| Installer | Coming soon |
-| Portable | Coming soon |
+| Installer | `*-setup.exe` |
+| Portable | `*-portable.exe` |
 
 ## Library layout
 

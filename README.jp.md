@@ -10,10 +10,14 @@
 
 ## Windows 版のダウンロード
 
-| 種類 | ダウンロード |
+[最新版をダウンロード](https://github.com/ATPComic/ATPComicManager/releases/latest) · [すべてのリリース](https://github.com/ATPComic/ATPComicManager/releases)
+
+リリースページの **Assets** から選択してください：
+
+| 種類 | ファイル |
 | --- | --- |
-| インストーラー | 公開準備中 |
-| ポータブル版 | 公開準備中 |
+| インストーラー | `*-setup.exe` |
+| ポータブル版 | `*-portable.exe` |
 
 ## ライブラリ構成
 

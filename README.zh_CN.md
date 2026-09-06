@@ -10,10 +10,14 @@
 
 ## 下载 Windows 版
 
-| 版本 | 下载 |
+[下载最新版本](https://github.com/ATPComic/ATPComicManager/releases/latest) · [所有版本](https://github.com/ATPComic/ATPComicManager/releases)
+
+在发布页的 **Assets** 中选择：
+
+| 版本 | 文件 |
 | --- | --- |
-| 安装版 | 待发布 |
-| 便携版 | 待发布 |
+| 安装版 | `*-setup.exe` |
+| 便携版 | `*-portable.exe` |
 
 ## 图库结构
 

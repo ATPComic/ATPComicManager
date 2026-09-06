@@ -59,6 +59,7 @@ button, input { font: inherit; }
 .warning-open, .pagination-footer { display: flex; align-items: center; }
 
 .brand-block { min-width: 140px; gap: 8px; }
+.brand-icon { display: block; flex-shrink: 0; object-fit: contain; }
 .brand-block h1, .pane-heading h2 { margin: 0; font-weight: 500; }
 .brand-block h1 { font-size: 14px; line-height: 20px; }
 .page-app-leading { min-width: 0; display: flex; align-items: center; gap: 7px; }

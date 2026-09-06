@@ -1,0 +1,6 @@
+// @name VariantNext
+// @description Open the next variant while keeping the current page number when possible.
+
+include('shared/comic-archive-core.nvjs');
+runVariantNext();
+

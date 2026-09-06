@@ -1,0 +1,85 @@
+{
+  "name": "atp-comic",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.js",
+  "description": "Arrange, tag, and peek through a local comic archive.",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "npm run icons && vite build",
+    "build:watch": "vite build --watch",
+    "scan": "node src/cli.js scan",
+    "apply": "node src/cli.js apply",
+    "serve": "npm run build && node src/cli.js serve",
+    "serve:api": "node src/cli.js serve",
+    "electron:dev": "npm run build && electron .",
+    "electron:pack": "npm run build && electron-builder --dir",
+    "electron:dist": "npm run build && electron-builder --win portable nsis",
+    "electron:dist:portable": "npm run build && electron-builder --win portable",
+    "electron:dist:installer": "npm run build && electron-builder --win nsis",
+    "icons": "node scripts/prepare-icons.mjs",
+    "android:sync": "npm run build && cap sync android",
+    "android:open": "cap open android",
+    "android:debug": "npm run android:sync && cd android && gradlew.bat assembleDebug",
+    "android:release:unsigned": "npm run android:sync && cd android && gradlew.bat assembleRelease bundleRelease",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "sharp": "^0.35.4"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/cli": "^7.6.9",
+    "@capacitor/core": "^7.6.9",
+    "@material/web": "^2.5.0",
+    "@mdi/js": "^7.4.47",
+    "@varlet/touch-emulator": "^3.20.4",
+    "@varlet/ui": "^3.20.4",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "electron": "^44.1.0",
+    "electron-builder": "^26.15.3",
+    "vite": "^8.2.1",
+    "vue": "^3.5.41"
+  },
+  "build": {
+    "appId": "io.github.atpcomic.manager",
+    "productName": "ATP Comic",
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/sharp/**/*",
+      "**/node_modules/@img/**/*"
+    ],
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "public/**/*",
+      "src/**/*",
+      "generated/icons/app.png",
+      "package.json"
+    ],
+    "win": {
+      "icon": "generated/icons/app.ico",
+      "target": [
+        "portable",
+        "nsis"
+      ]
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    },
+    "nsis": {
+      "artifactName": "${productName}-${version}-setup.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+<title id="title">ATP Comic — Tag-tail Peek buddy</title>
+<desc id="desc">A curious one-eyed regular pentagon with two round tail nodes and an upward-pointing tag tip. An abstract mascot for Arrange, Tag and Peek.</desc>
+<g id="background" inkscape:groupmode="layer" inkscape:label="01 Background">
+<rect width="512" height="512" rx="112" fill="#14263D"/>
+</g>
+<g id="tail" inkscape:groupmode="layer" inkscape:label="02 Two nodes and an upturned tag" fill="#79E6BF">
+<path d="M87 267 C87 304 102 315 132 302 L184 326 236 300" fill="none" stroke="#79E6BF" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="tag-tip" transform="rotate(-15 91 267)" fill-rule="evenodd" d="M70 280 Q64 280 64 274 L64 230 Q64 226 67 223 L87 203 Q91 199 95 203 L115 223 Q118 226 118 230 L118 274 Q118 280 112 280 Z M99 229 A8 8 0 1 0 83 229 A8 8 0 1 0 99 229 Z"/>
+<circle cx="132" cy="302" r="23"/>
+<circle cx="184" cy="326" r="23"/>
+</g>
+<g id="body" inkscape:groupmode="layer" inkscape:label="03 Regular pentagon - 108 degree interior angles">
+<polygon points="310.000000,148.000000 420.322556,228.154029 378.183089,357.845971 241.816911,357.845971 199.677444,228.154029" fill="#79E6BF" stroke="#79E6BF" stroke-width="20" stroke-linejoin="round"/>
+</g>
+<g id="eye" inkscape:groupmode="layer" inkscape:label="04 Curious Peek eye">
+<circle cx="316" cy="267" r="49" fill="#FFF9E9"/>
+<circle cx="332" cy="258" r="25" fill="#14263D"/>
+</g>
+</svg>

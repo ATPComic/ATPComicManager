@@ -1,0 +1,6 @@
+// @name EpisodeNext
+// @description Open the next episode while keeping the current page number when possible.
+
+include('shared/comic-archive-core.nvjs');
+runEpisodeNext();
+

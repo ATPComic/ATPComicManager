@@ -1,0 +1,6 @@
+// @name PageNext
+// @description Next page within the same variant. At the end of an episode, jumps to the start of the next episode (same variant).
+
+include('shared/comic-archive-core.nvjs');
+runPageNext();
+

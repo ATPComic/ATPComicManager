@@ -1,0 +1,6 @@
+// @name EpisodePrev
+// @description Open the previous episode while keeping the current page number when possible.
+
+include('shared/comic-archive-core.nvjs');
+runEpisodePrev();
+

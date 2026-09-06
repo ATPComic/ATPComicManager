@@ -1,0 +1,6 @@
+// @name ToggleVariantPeek
+// @description Toggle mouse-circle preview of the same page in the next variant (a -> b, b -> c).
+
+include('shared/comic-archive-core.nvjs');
+toggleVariantPeek();
+

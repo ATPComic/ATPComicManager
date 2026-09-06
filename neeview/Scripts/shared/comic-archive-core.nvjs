@@ -1,0 +1,677 @@
+// Comic Archive Manager NeeView runtime helpers.
+// This file is included by each command/event script.
+//
+// IMPORTANT: NeeView runs every script in its own Jint engine instance
+// (ScriptUnit creates a new JavaScriptEngine per run) and executes them
+// concurrently via Task.Run. Therefore helper functions MUST be re-defined
+// on every include, in the current engine scope. Do NOT cache function
+// objects in nv.Values across engines - only plain data (theme index cache)
+// lives there.
+
+var Path = System.IO.Path;
+var File = System.IO.File;
+var Directory = System.IO.Directory;
+
+// Peek appearance. Radius is relative to the image height; Feather is pixels.
+// Holding the left mouse button temporarily doubles Radius in NeeView.
+var variantPeekSettings = {
+    radius: 0.25,
+    feather: 16.0
+};
+
+function getStore() {
+    var store = nv.Values.ComicArchiveNeeViewStore;
+    if (!store) {
+        store = {};
+        nv.Values.ComicArchiveNeeViewStore = store;
+    }
+    if (!store.themeIndexCache) {
+        store.themeIndexCache = {};
+    }
+    return store;
+}
+
+// Guard against concurrent or reentrant scripts such as OnPageEnd and PageNext.
+// Only one book-changing operation may run at a time; skip overlapping calls
+// to prevent LoadAs/JumpPage races.
+function acquireGuard() {
+    var store = getStore();
+    if (store.busy) {
+        return false;
+    }
+    store.busy = true;
+    return true;
+}
+
+function releaseGuard() {
+    var store = getStore();
+    store.busy = false;
+}
+
+function normalizePath(value) {
+    return String(value || '').replace(/\\/g, '/');
+}
+
+function combinePath() {
+    var result = String(arguments[0] || '');
+    for (var index = 1; index < arguments.length; index += 1) {
+        result = Path.Combine(result, String(arguments[index]));
+    }
+    return result;
+}
+
+function isDirectoryPath(targetPath) {
+    return !!targetPath && Directory.Exists(targetPath);
+}
+
+function getCandidateStartPath() {
+    if (nv.Book && nv.Book.ViewPages && nv.Book.ViewPages.length > 0) {
+        var viewPage = nv.Book.ViewPages[0];
+        if (viewPage && viewPage.RawPath) {
+            return viewPage.RawPath;
+        }
+        if (viewPage && viewPage.Path) {
+            return viewPage.Path;
+        }
+    }
+
+    return nv.Book ? nv.Book.Path : null;
+}
+
+function findThemeFolder(startPath) {
+    if (!startPath) {
+        return null;
+    }
+
+    var currentPath = isDirectoryPath(startPath) ? startPath : Path.GetDirectoryName(startPath);
+    while (currentPath) {
+        var indexPath = combinePath(currentPath, '.theme-index.json');
+        if (File.Exists(indexPath)) {
+            return currentPath;
+        }
+
+        var parentPath = Path.GetDirectoryName(currentPath);
+        if (!parentPath || parentPath === currentPath) {
+            break;
+        }
+        currentPath = parentPath;
+    }
+
+    return null;
+}
+
+function loadThemeIndex(themeFolderPath) {
+    var indexPath = combinePath(themeFolderPath, '.theme-index.json');
+    var store = getStore();
+    var cacheEntry = store.themeIndexCache[indexPath];
+    var lastWriteTime = File.GetLastWriteTimeUtc(indexPath).Ticks;
+
+    if (cacheEntry && cacheEntry.lastWriteTime === lastWriteTime) {
+        return cacheEntry.data;
+    }
+
+    var raw = File.ReadAllText(indexPath);
+    var data = JSON.parse(raw);
+    if (data.version !== 1) {
+        throw new Error('Unsupported theme index version: ' + data.version);
+    }
+
+    store.themeIndexCache[indexPath] = {
+        lastWriteTime: lastWriteTime,
+        data: data
+    };
+
+    return data;
+}
+
+function getEpisodeNames(themeIndex) {
+    return (themeIndex.episodes || []).map(function (episode) {
+        return episode.episode;
+    });
+}
+
+function sortEntries(entries) {
+    return (entries || []).slice().sort(function (left, right) {
+        return Number(left.page) - Number(right.page);
+    });
+}
+
+function getVariantNames(episode) {
+    return Object.keys(episode && episode.variants ? episode.variants : {}).sort(function (left, right) {
+        return left.localeCompare(right);
+    });
+}
+
+function getFirstVariantName(episode) {
+    var variantNames = getVariantNames(episode);
+    return variantNames.length > 0 ? variantNames[0] : null;
+}
+
+function getRelativePagePath(themeFolderPath, pagePath) {
+    return normalizePath(Path.GetRelativePath(themeFolderPath, pagePath));
+}
+
+function findEntry(themeIndex, relativePagePath) {
+    var normalizedRelativePath = normalizePath(relativePagePath);
+    var episodes = themeIndex.episodes || [];
+
+    for (var episodeIndex = 0; episodeIndex < episodes.length; episodeIndex += 1) {
+        var episode = episodes[episodeIndex];
+        var variantNames = getVariantNames(episode);
+        for (var variantIndex = 0; variantIndex < variantNames.length; variantIndex += 1) {
+            var variantName = variantNames[variantIndex];
+            var entries = sortEntries(episode.variants[variantName]);
+            for (var entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+                var entry = entries[entryIndex];
+                if (normalizePath(entry.file) === normalizedRelativePath) {
+                    return {
+                        episodeIndex: episodeIndex,
+                        episode: episode,
+                        variantName: variantName,
+                        variantIndex: variantIndex,
+                        entryIndex: entryIndex,
+                        entry: entry
+                    };
+                }
+            }
+        }
+    }
+
+    return null;
+}
+
+function pickEntryByPage(entries, pageNumber) {
+    var sortedEntries = sortEntries(entries);
+    if (sortedEntries.length === 0) {
+        return null;
+    }
+
+    var targetPageNumber = Number(pageNumber);
+    var exactMatch = null;
+    var bestMatch = null;
+
+    for (var index = 0; index < sortedEntries.length; index += 1) {
+        var entry = sortedEntries[index];
+        var entryPageNumber = Number(entry.page);
+        if (entryPageNumber === targetPageNumber) {
+            exactMatch = entry;
+            break;
+        }
+        if (entryPageNumber <= targetPageNumber) {
+            bestMatch = entry;
+        }
+    }
+
+    return exactMatch || bestMatch || sortedEntries[0];
+}
+
+function findEntryByPage(entries, pageNumber) {
+    var targetPageNumber = Number(pageNumber);
+    var sortedEntries = sortEntries(entries);
+    for (var index = 0; index < sortedEntries.length; index += 1) {
+        if (Number(sortedEntries[index].page) === targetPageNumber) {
+            return sortedEntries[index];
+        }
+    }
+    return null;
+}
+
+// Return the exact page in the immediately following variant.
+// Never wrap or fall back to an adjacent page: a -> b, b -> c, c -> null.
+function getNextVariantEntry(currentEntry) {
+    if (!currentEntry || !currentEntry.episode) {
+        return null;
+    }
+
+    var variantNames = getVariantNames(currentEntry.episode);
+    var currentVariantIndex = variantNames.indexOf(currentEntry.variantName);
+    if (currentVariantIndex < 0 || currentVariantIndex >= variantNames.length - 1) {
+        return null;
+    }
+
+    var nextVariantName = variantNames[currentVariantIndex + 1];
+    var entry = findEntryByPage(
+        currentEntry.episode.variants[nextVariantName],
+        currentEntry.entry.page
+    );
+    return entry ? { variantName: nextVariantName, entry: entry } : null;
+}
+
+function openRelativeFile(themeFolderPath, relativeFilePath) {
+    var absolutePath = combinePath(themeFolderPath, normalizePath(relativeFilePath));
+    nv.Command.LoadAs.Execute([absolutePath]);
+    return absolutePath;
+}
+
+// Return the target's one-based page in the current book, or null if absent.
+// Use nv.Book.Pages ordering rather than assuming filename order.
+function getPageNumberForFile(themeFolderPath, relativeFilePath) {
+    var targetRelativePath = normalizePath(relativeFilePath);
+    var pages = nv.Book && nv.Book.Pages ? nv.Book.Pages : [];
+    for (var index = 0; index < pages.length; index += 1) {
+        var page = pages[index];
+        var pagePath = page && page.Path ? page.Path : null;
+        if (!pagePath) {
+            continue;
+        }
+        if (getRelativePagePath(themeFolderPath, pagePath) === targetRelativePath) {
+            return index + 1;
+        }
+    }
+    return null;
+}
+
+function getThemeContext() {
+    var startPath = getCandidateStartPath();
+    var themeFolderPath = findThemeFolder(startPath);
+    if (!themeFolderPath) {
+        return null;
+    }
+
+    var themeIndex = loadThemeIndex(themeFolderPath);
+    var currentPath = startPath;
+    if (!currentPath) {
+        currentPath = themeFolderPath;
+    }
+
+    if (!isDirectoryPath(currentPath) && File.Exists(currentPath)) {
+        currentPath = currentPath;
+    }
+
+    var currentRelativePagePath = null;
+    if (currentPath && currentPath !== themeFolderPath) {
+        currentRelativePagePath = getRelativePagePath(themeFolderPath, currentPath);
+    }
+
+    var currentEntry = currentRelativePagePath ? findEntry(themeIndex, currentRelativePagePath) : null;
+
+    return {
+        themeFolderPath: themeFolderPath,
+        themeIndex: themeIndex,
+        currentPath: currentPath,
+        currentRelativePagePath: currentRelativePagePath,
+        currentEntry: currentEntry
+    };
+}
+
+function findPeekLayer() {
+    var layers = nv.ImageEffect && nv.ImageEffect.Layers ? nv.ImageEffect.Layers : [];
+    var peekLayers = [];
+    for (var index = 0; index < layers.length; index += 1) {
+        if (String(layers[index].EffectType) === 'Peek') {
+            peekLayers.push(layers[index]);
+        }
+    }
+
+    if (peekLayers.length === 0) {
+        return null;
+    }
+
+    // PageNext/PagePrev scripts can overlap. Keep the active layer when there
+    // is one, and make every lookup converge on a single Peek layer.
+    var primaryIndex = 0;
+    for (var peekIndex = 0; peekIndex < peekLayers.length; peekIndex += 1) {
+        if (peekLayers[peekIndex].IsEnabled) {
+            primaryIndex = peekIndex;
+            break;
+        }
+    }
+
+    for (var duplicateIndex = peekLayers.length - 1; duplicateIndex >= 0; duplicateIndex -= 1) {
+        if (duplicateIndex !== primaryIndex) {
+            peekLayers[duplicateIndex].Remove();
+        }
+    }
+
+    return peekLayers[primaryIndex];
+}
+
+function ensurePeekLayer() {
+    var layer = findPeekLayer();
+    if (layer) {
+        applyPeekSettings(layer);
+        return layer;
+    }
+    if (!nv.ImageEffect || !nv.ImageEffect.CreateNew) {
+        return null;
+    }
+
+    layer = nv.ImageEffect.CreateNew();
+    if (!layer) {
+        return null;
+    }
+    layer.EffectType = 'Peek';
+    // Re-check after creation so concurrent scripts cannot leave duplicates.
+    layer = findPeekLayer() || layer;
+    applyPeekSettings(layer);
+    return layer;
+}
+
+function clampNumber(value, minimum, maximum, fallback) {
+    var number = Number(value);
+    if (!isFinite(number)) {
+        return fallback;
+    }
+    return Math.max(minimum, Math.min(maximum, number));
+}
+
+function applyPeekSettings(layer) {
+    if (!layer || !layer.Effect) {
+        return false;
+    }
+
+    layer.Effect.Radius = clampNumber(variantPeekSettings.radius, 0.0, 1.0, 0.1);
+    layer.Effect.Feather = clampNumber(variantPeekSettings.feather, 0.0, 64.0, 8.0);
+    return true;
+}
+
+function getPeekEnabled() {
+    var store = getStore();
+    if (store.peekStateVersion !== 1) {
+        var layer = findPeekLayer();
+        // Migrate the old implementation, which cached false when no layer
+        // could be found through the incorrect nv.Effect accessor.
+        store.peekEnabled = layer ? !!layer.IsEnabled : true;
+        store.peekStateVersion = 1;
+    }
+    else if (typeof store.peekEnabled !== 'boolean') {
+        store.peekEnabled = true;
+    }
+    return store.peekEnabled;
+}
+
+function setPeekLayerPath(layer, imagePath) {
+    if (!layer || !layer.Effect) {
+        return false;
+    }
+    layer.Effect.ImagePath = imagePath || '';
+    return true;
+}
+
+function resolvePeekImagePath(context) {
+    if (!context || !context.currentEntry) {
+        return null;
+    }
+
+    var nextVariant = getNextVariantEntry(context.currentEntry);
+    if (!nextVariant) {
+        return null;
+    }
+
+    var imagePath = combinePath(context.themeFolderPath, normalizePath(nextVariant.entry.file));
+    return File.Exists(imagePath) ? imagePath : null;
+}
+
+function syncVariantPeekForEntry(themeFolderPath, episode, variantName, entry) {
+    if (!getPeekEnabled()) {
+        return false;
+    }
+
+    if (!themeFolderPath || !episode || !variantName || !entry) {
+        return false;
+    }
+
+    var layer = ensurePeekLayer();
+    if (!layer) {
+        throw new Error('This NeeView build does not expose nv.ImageEffect or the Peek effect.');
+    }
+
+    var imagePath = resolvePeekImagePath({
+        themeFolderPath: themeFolderPath,
+        currentEntry: {
+            episode: episode,
+            variantName: variantName,
+            entry: entry
+        }
+    });
+    setPeekLayerPath(layer, imagePath);
+    layer.IsEnabled = true;
+    nv.ImageEffect.IsEnabled = true;
+    return !!imagePath;
+}
+
+function syncVariantPeek() {
+    var context = getThemeContext();
+    if (!context || !context.currentEntry) {
+        return false;
+    }
+
+    return syncVariantPeekForEntry(
+        context.themeFolderPath,
+        context.currentEntry.episode,
+        context.currentEntry.variantName,
+        context.currentEntry.entry
+    );
+}
+
+function disableVariantPeek() {
+    var store = getStore();
+    store.peekEnabled = false;
+    store.peekStateVersion = 1;
+
+    var layer = findPeekLayer();
+    if (layer) {
+        setPeekLayerPath(layer, '');
+        layer.IsEnabled = false;
+    }
+}
+
+function enableVariantPeek() {
+    var store = getStore();
+    store.peekEnabled = true;
+    store.peekStateVersion = 1;
+    return syncVariantPeek();
+}
+
+function toggleVariantPeek() {
+    if (getPeekEnabled()) {
+        disableVariantPeek();
+        nv.ShowMessage('Comic Archive Manager: variant peek disabled.');
+        return false;
+    }
+
+    var hasImage = enableVariantPeek();
+    nv.ShowMessage(hasImage
+        ? 'Comic Archive Manager: variant peek enabled.'
+        : 'Comic Archive Manager: variant peek enabled; this page has no next variant.');
+    return true;
+}
+
+function runVariant(direction) {
+    if (!acquireGuard()) {
+        return false;
+    }
+    try {
+        var context = getThemeContext();
+        if (!context || !context.currentEntry) {
+            nv.ShowMessage('Comic Archive Manager: current page is not inside a themed reading folder.');
+            return false;
+        }
+
+        var episode = context.currentEntry.episode;
+        var variantNames = getVariantNames(episode);
+        if (variantNames.length === 0) {
+            nv.ShowMessage('Comic Archive Manager: no variants found for the current episode.');
+            return false;
+        }
+
+        var currentVariantIndex = variantNames.indexOf(context.currentEntry.variantName);
+        if (currentVariantIndex < 0) {
+            currentVariantIndex = 0;
+        }
+
+        var nextVariantIndex = (currentVariantIndex + direction + variantNames.length) % variantNames.length;
+        var nextVariantName = variantNames[nextVariantIndex];
+        var targetEntry = pickEntryByPage(episode.variants[nextVariantName], context.currentEntry.entry.page);
+        if (!targetEntry) {
+            nv.ShowMessage('Comic Archive Manager: selected variant has no pages.');
+            return false;
+        }
+
+        // Variants share a book, so jump to the target file's page in that book.
+        var pageNumber = getPageNumberForFile(context.themeFolderPath, targetEntry.file);
+        if (pageNumber === null) {
+            nv.ShowMessage('Comic Archive Manager: target page is not found in the current book.');
+            return false;
+        }
+
+        nv.Command.JumpPage.Execute([pageNumber]);
+        return true;
+    }
+    finally {
+        releaseGuard();
+    }
+}
+
+function runEpisode(direction) {
+    if (!acquireGuard()) {
+        return false;
+    }
+    try {
+        var context = getThemeContext();
+        if (!context || !context.currentEntry) {
+            nv.ShowMessage('Comic Archive Manager: current page is not inside a themed reading folder.');
+            return false;
+        }
+
+        var episodes = context.themeIndex.episodes || [];
+        var currentEpisodeIndex = context.currentEntry.episodeIndex;
+        var nextEpisodeIndex = currentEpisodeIndex + direction;
+        if (nextEpisodeIndex < 0 || nextEpisodeIndex >= episodes.length) {
+            nv.ShowMessage('Comic Archive Manager: no more episodes in that direction.');
+            return false;
+        }
+
+        var targetEpisode = episodes[nextEpisodeIndex];
+        var preferredVariantName = context.currentEntry.variantName;
+        var targetVariantName = Object.prototype.hasOwnProperty.call(targetEpisode.variants || {}, preferredVariantName)
+            ? preferredVariantName
+            : getFirstVariantName(targetEpisode);
+        if (!targetVariantName) {
+            nv.ShowMessage('Comic Archive Manager: selected episode has no variants.');
+            return false;
+        }
+
+        var targetEntries = sortEntries(targetEpisode.variants[targetVariantName]);
+        var targetEntry = pickEntryByPage(targetEntries, context.currentEntry.entry.page);
+        if (!targetEntry) {
+            nv.ShowMessage('Comic Archive Manager: selected episode has no pages.');
+            return false;
+        }
+
+        openRelativeFile(context.themeFolderPath, targetEntry.file);
+        return true;
+    }
+    finally {
+        releaseGuard();
+    }
+}
+
+// Page within the current variant, skipping other variants.
+// At episode boundaries, continue in the same variant in the adjacent episode.
+function runPage(direction) {
+    if (!acquireGuard()) {
+        return false;
+    }
+    try {
+        var context = getThemeContext();
+        if (!context || !context.currentEntry) {
+            nv.ShowMessage('Comic Archive Manager: current page is not inside a themed reading folder.');
+            return false;
+        }
+
+        var episode = context.currentEntry.episode;
+        var variantName = context.currentEntry.variantName;
+        var entries = sortEntries(episode.variants[variantName]);
+        if (entries.length === 0) {
+            nv.ShowMessage('Comic Archive Manager: current variant has no pages.');
+            return false;
+        }
+
+        var currentPosition = entries.indexOf(context.currentEntry.entry);
+        var nextPosition = currentPosition + direction;
+
+        // Use JumpPage for navigation within the current book and variant.
+        if (nextPosition >= 0 && nextPosition < entries.length) {
+            var pageNumber = getPageNumberForFile(context.themeFolderPath, entries[nextPosition].file);
+            if (pageNumber === null) {
+                nv.ShowMessage('Comic Archive Manager: target page is not found in the current book.');
+                return false;
+            }
+            // JumpPage returns before OnPageChanged has necessarily completed.
+            // Preload the destination page's Peek path to avoid one-event latency.
+            syncVariantPeekForEntry(context.themeFolderPath, episode, variantName, entries[nextPosition]);
+            nv.Command.JumpPage.Execute([pageNumber]);
+            return true;
+        }
+
+        // Cross the episode boundary while preserving the current variant.
+        var episodes = context.themeIndex.episodes || [];
+        var neighborIndex = context.currentEntry.episodeIndex + direction;
+        if (neighborIndex < 0 || neighborIndex >= episodes.length) {
+            nv.ShowMessage(direction > 0
+                ? 'Comic Archive Manager: you reached the end of the theme.'
+                : 'Comic Archive Manager: you reached the start of the theme.');
+            return false;
+        }
+
+        var targetEpisode = episodes[neighborIndex];
+        var targetVariantName = Object.prototype.hasOwnProperty.call(targetEpisode.variants || {}, variantName)
+            ? variantName
+            : getFirstVariantName(targetEpisode);
+        if (!targetVariantName) {
+            nv.ShowMessage('Comic Archive Manager: neighbor episode has no variants.');
+            return false;
+        }
+
+        var targetEntries = sortEntries(targetEpisode.variants[targetVariantName]);
+        var targetEntry = direction > 0 ? targetEntries[0] : targetEntries[targetEntries.length - 1];
+        if (!targetEntry) {
+            nv.ShowMessage('Comic Archive Manager: neighbor episode has no pages.');
+            return false;
+        }
+
+        // Episodes are separate books; open the target with LoadAs.
+        syncVariantPeekForEntry(context.themeFolderPath, targetEpisode, targetVariantName, targetEntry);
+        openRelativeFile(context.themeFolderPath, targetEntry.file);
+        return true;
+    }
+    finally {
+        releaseGuard();
+    }
+}
+
+// Command scripts call these engine-scope functions after including this file.
+function runVariantNext() {
+    return runVariant(1);
+}
+
+function runVariantPrev() {
+    return runVariant(-1);
+}
+
+function runEpisodeNext() {
+    return runEpisode(1);
+}
+
+function runEpisodePrev() {
+    return runEpisode(-1);
+}
+
+function runPageNext() {
+    return runPage(1);
+}
+
+function runPagePrev() {
+    return runPage(-1);
+}
+
+function runEpisodeByPageEnd(direction) {
+    if (direction > 0) {
+        return runEpisode(1);
+    }
+    if (direction < 0) {
+        return runEpisode(-1);
+    }
+    return false;
+}

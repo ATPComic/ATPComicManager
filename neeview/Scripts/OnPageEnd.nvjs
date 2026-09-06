@@ -1,0 +1,14 @@
+// @name OnPageEnd
+// @description Continue to the previous or next episode when paging past the first or last page.
+
+include('shared/comic-archive-core.nvjs');
+
+var direction = 0;
+if (nv.Args != null) {
+    direction = Number(nv.Args[0]);
+}
+
+if (getThemeContext()) {
+    runEpisodeByPageEnd(direction);
+}
+

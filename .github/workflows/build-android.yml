@@ -1,0 +1,35 @@
+name: Build Android
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  debug-apk:
+    # Android packaging is paused, including manual dispatch.
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      - run: npm test
+      - run: npm run android:sync
+      - run: chmod +x android/gradlew
+      - run: ./android/gradlew -p android assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ATP-Comic-Android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

@@ -1,0 +1,6 @@
+// @name VariantPrev
+// @description Open the previous variant while keeping the current page number when possible.
+
+include('shared/comic-archive-core.nvjs');
+runVariantPrev();
+

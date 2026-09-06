@@ -1,0 +1,6 @@
+// @name PagePrev
+// @description Previous page within the same variant. At the start of an episode, jumps to the end of the previous episode (same variant).
+
+include('shared/comic-archive-core.nvjs');
+runPagePrev();
+

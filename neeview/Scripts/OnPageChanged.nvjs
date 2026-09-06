@@ -1,0 +1,7 @@
+// @name OnPageChanged
+// @description This script is executed when the page is changed.
+
+include('shared/comic-archive-core.nvjs');
+
+syncVariantPeek();
+

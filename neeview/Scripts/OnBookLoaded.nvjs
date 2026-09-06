@@ -1,0 +1,13 @@
+// @name OnBookLoaded
+// @description NeeView event hook for Comic Archive Manager reading folders.
+
+include('shared/comic-archive-core.nvjs');
+
+var comicArchiveContext = getThemeContext();
+if (comicArchiveContext) {
+    // PageEndAction is an application config value, not a BookConfigAccessor
+    // property. Using nv.Book.Config here throws before Peek can be synced.
+    nv.Config.Book.PageEndAction = 'None';
+    syncVariantPeek();
+}
+

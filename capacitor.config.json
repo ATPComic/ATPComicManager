@@ -1,0 +1,11 @@
+{
+  "appId": "io.github.atpcomic.manager",
+  "appName": "ATP Comic",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#101114"
+  }
+}

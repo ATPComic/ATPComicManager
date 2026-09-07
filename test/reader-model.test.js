@@ -38,7 +38,7 @@ test('reader model groups variants and retains API file indexes', () => {
 test('thumbnail URLs can carry a stable source identity across rescans', () => {
   assert.equal(
     getThumbnailUrl('20250401', 2, '1_x'),
-    '/api/thumbnail?episodeId=20250401&index=2&key=1_x'
+    '/api/thumbnail?episodeId=20250401&index=2&file=1_x'
   );
 });
 

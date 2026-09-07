@@ -23,6 +23,16 @@ test('shared JSON carries custom recognition, dates and manual variants across w
     const recognition = { rules: [{ id: 'sets', prefix: 'Set-', suffix: '' }], identityMarkers: ['clean'], episodeDates: { [episodeId]: '2026-01-02' } };
     await saveRecognitionState(configs[0].databasePath, recognition);
     storageFor(configs[0].databasePath).write('variants', { version: 3, episodes: { [episodeId]: { a: [], b: ['001_clean'], c: [] } }, peekRelations: {} });
+    const sourceStore = storageFor(configs[0].databasePath);
+    const targetStore = storageFor(configs[1].databasePath);
+    const tagState = { version: 3, categories: [{ id: 'kind', name: 'Kind', emoji: '', values: [{ id: 'favorite', name: 'Favorite', emoji: '', values: [] }] }], episodeTags: {} };
+    sourceStore.write('tags', tagState);
+    sourceStore.write('theme', { title: 'Shared set', episodes: [episodeId, '20260103'], tags: { kind: ['favorite'] } });
+    sourceStore.write('theme', { title: 'Empty set', episodes: [], tags: {} });
+    await fs.mkdir(path.join(roots[0], 'Archive', '20260103'));
+    await fs.writeFile(path.join(roots[0], 'Archive', '20260103', '20260103_a1.png'), 'fixture');
+    targetStore.write('theme', { title: 'Shared set', episodes: ['20260104'], tags: {} });
+    targetStore.write('theme', { title: 'Local set', episodes: [], tags: {} });
     await saveRecognitionState(configs[1].databasePath, { rules: [{ id: 'sets', prefix: 'Local-', suffix: '' }], identityMarkers: ['local'], episodeDates: { 'folder:Archive/Local-One': '2025-01-01' } });
     for (const config of configs) servers.push(await startServer(config));
     const request = async (server, route, body = {}) => {
@@ -31,10 +41,15 @@ test('shared JSON carries custom recognition, dates and manual variants across w
       assert.equal(response.status, 200, JSON.stringify(value));
       return value;
     };
+    await request(servers[0], '/api/scan');
     const exported = await request(servers[0], '/api/export/json');
+    assert.ok(exported.export.library.episodes[episodeId]);
     assert.deepEqual(exported.export.recognition, { version: 1, ...recognition });
     const imported = await request(servers[1], '/api/import/json', exported);
-    assert.equal(imported.missingCount, 0);
+    assert.equal(imported.missingCount, 2);
+    assert.deepEqual(imported.themes.find(theme => theme.title === 'Shared set'), { title: 'Shared set', episodes: ['20260104', episodeId, '20260103'], tags: { kind: ['favorite'] } });
+    assert.ok(imported.themes.some(theme => theme.title === 'Empty set'));
+    assert.ok(imported.themes.some(theme => theme.title === 'Local set'));
     const episode = imported.library.episodes[episodeId];
     assert.ok(episode);
     assert.equal(episode.date, '2026-01-02');
@@ -54,6 +69,8 @@ test('shared JSON carries custom recognition, dates and manual variants across w
     servers[1] = await startServer(configs[1]);
     await request(servers[1], '/api/scan');
     const afterRestart = await request(servers[1], '/api/export/json');
+    assert.deepEqual(afterRestart.export.themes, targetStore.read('themes'));
+    assert.deepEqual(afterRestart.export.themes.find(theme => theme.title === 'Shared set').episodes, ['20260104', episodeId, '20260103']);
     assert.deepEqual(afterRestart.export.recognition, saved);
     assert.equal(afterRestart.export.library.episodes[episodeId].date, '2026-01-02');
     assert.deepEqual(afterRestart.export.library.episodes[episodeId].files[0].assignments, [{ variant: 'b', pageNumber: 1 }]);
@@ -143,7 +160,7 @@ test('JSON export contains library, tags, and variants instead of an arrangement
     });
     assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.deepEqual(Object.keys(payload.export).sort(), ['library', 'recognition', 'tags', 'variants']);
+    assert.deepEqual(Object.keys(payload.export).sort(), ['library', 'recognition', 'tags', 'themes', 'variants']);
     assert.equal('plan' in payload.export, false);
     assert.deepEqual(payload.export.library.episodes, {});
   } finally {

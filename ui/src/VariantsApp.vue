@@ -400,8 +400,8 @@ function clearDrag() {
 }
 
 async function loadState() {
-  const payload = await requestJson('/api/state');
   const scan = await requestJson('/api/scan', { method: 'POST' });
+  const payload = await requestJson('/api/state');
   state.library = scan.library ?? payload.library ?? state.library;
   state.assignments = cloneData(createVariantAssignmentDraft(
     payload.variantAssignments ?? createEmptyVariantAssignments(),
@@ -415,10 +415,8 @@ async function rescan() {
   if (state.busy) return;
   state.busy = true;
   try {
-    const [payload, variants] = await Promise.all([
-      requestJson('/api/scan', { method: 'POST', body: '{}' }),
-      requestJson('/api/variants')
-    ]);
+    const payload = await requestJson('/api/scan', { method: 'POST', body: '{}' });
+    const variants = await requestJson('/api/variants');
     state.library = payload.library ?? state.library;
     state.assignments = cloneData(createVariantAssignmentDraft(variants.variantAssignments, state.library));
     if (!episodeIds.value.includes(state.selectedEpisodeId)) state.selectedEpisodeId = episodeIds.value[0] ?? null;
@@ -454,7 +452,7 @@ function changeLocale(value) {
 }
 
 function goBack() {
-  if (returnPathFromHref(window.location.href, null)) returnFromPage('/');
+  if (returnPathFromHref(window.location.href, null)) return returnFromPage('/');
   window.location.assign(libraryEpisodePath(state.selectedEpisodeId));
 }
 
@@ -591,7 +589,7 @@ onMounted(async () => {
                   @click="touchFile(token, column, index)"
                 >
                   <MdiIcon class="drag-handle" :path="mdiDragVertical" />
-                  <img :src="getThumbnailUrl(state.selectedEpisodeId, fileByToken.get(token).index, token)" alt="" loading="lazy" decoding="async">
+                  <img :src="getThumbnailUrl(state.selectedEpisodeId, fileByToken.get(token).index, fileByToken.get(token).file.assetKey)" alt="" loading="lazy" decoding="async">
                   <div class="variant-file-copy">
                     <div class="variant-file-title">
                       <strong>{{ token }}</strong>

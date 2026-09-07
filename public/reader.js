@@ -178,13 +178,13 @@ export class ComicReader {
     this.entry = entry;
     const token = ++this.loadToken;
     const peekToken = ++this.peekLoadToken;
-    const imageUrl = getImageUrl(this.episodeId, entry.index);
+    const imageUrl = getImageUrl(this.episodeId, entry.index, entry.file.assetKey);
     const nextImage = new Image();
     nextImage.decoding = 'async';
     nextImage.src = imageUrl;
     const peekState = this.resolvePeekTarget(entry);
     const peekEntry = peekState.entry;
-    const peekUrl = peekEntry ? getImageUrl(this.episodeId, peekEntry.index) : null;
+    const peekUrl = peekEntry ? getImageUrl(this.episodeId, peekEntry.index, peekEntry.file.assetKey) : null;
     const nextPeekImage = peekUrl ? new Image() : null;
     if (nextPeekImage) {
       nextPeekImage.decoding = 'async';
@@ -243,7 +243,7 @@ export class ComicReader {
     const episodeId = this.episodeId;
     const token = ++this.peekLoadToken;
     const peekState = this.resolvePeekTarget(entry);
-    const peekUrl = peekState.entry ? getImageUrl(episodeId, peekState.entry.index) : null;
+    const peekUrl = peekState.entry ? getImageUrl(episodeId, peekState.entry.index, peekState.entry.file.assetKey) : null;
     this.peekImage.hidden = true;
     this.syncPeekInteractionState();
     const image = peekUrl ? new Image() : null;
@@ -794,7 +794,7 @@ export class ComicReader {
     const sourceEpisodeId = this.episodeId;
     const transitionImage = new Image();
     transitionImage.decoding = 'async';
-    transitionImage.src = getImageUrl(this.episodeId, firstEntry.index);
+    transitionImage.src = getImageUrl(this.episodeId, firstEntry.index, firstEntry.file.assetKey);
     await transitionImage.decode().catch(() => {});
     if (!this.isOpen() || sourceEpisodeId !== this.episodeId || this.peekTransitionStage) return;
 
@@ -953,7 +953,7 @@ export class ComicReader {
     for (const entry of candidates) {
       const image = new Image();
       image.decoding = 'async';
-      image.src = getImageUrl(this.episodeId, entry.index);
+      image.src = getImageUrl(this.episodeId, entry.index, entry.file.assetKey);
     }
   }
 

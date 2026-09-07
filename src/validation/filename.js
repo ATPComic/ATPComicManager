@@ -4,7 +4,7 @@ const IMAGE_EXTENSION_SOURCE = '(?:jpe?g|png|webp|gif|bmp|tiff?|avif)';
 const SOURCE_IMAGE_PATTERN = new RegExp(`^(\\d{8})(.*)\\.${IMAGE_EXTENSION_SOURCE}$`, 'i');
 const IMAGE_EXTENSION_PATTERN = new RegExp(`\\.${IMAGE_EXTENSION_SOURCE}$`, 'i');
 const SOURCE_TAIL_PATTERN = /(?:^|[_\s-])([a-z]?\d+(?:_[a-z0-9]+)*)$/i;
-const DEFAULT_VARIANT_TOKEN_PATTERN = /^([a-z])(\d+)(?:_x)?$/i;
+const DEFAULT_VARIANT_TOKEN_PATTERN = /^([a-z])(\d+)$/i;
 const SOURCE_PAGE_PATTERN = /^[a-z]?(\d+)/i;
 function getIdentityMarkers(sourceStem, configuredMarkers) {
   const stem = `_${sourceStem.toLowerCase()}_`;
@@ -31,7 +31,7 @@ export function parseImageFilename(fileName, identityMarkers = []) {
     pageNumber,
     fileName,
     assignmentToken,
-    hasVariantSuffix: /_x$/i.test(sourceToken),
+    hasVariantSuffix: false,
     requiresVariantAssignment: !variant
   };
 }
@@ -57,6 +57,48 @@ export function parseUndatedImageFilename(fileName, identityMarkers = []) {
 
 export function getVariantAssignmentToken(parsed) {
   return parsed?.assignmentToken ?? null;
+}
+
+export function canonicalDatedToken(token) {
+  return String(token ?? '').toLowerCase().replace(/^([a-z]?)(\d+)/, (_, letter, page) => `${letter}${Number(page)}`);
+}
+
+export function datedFileIdentity(file, identityMarkers = []) {
+  const parsed = parseImageFilename(file?.name, identityMarkers);
+  if (!parsed) return null;
+  return `${parsed.episodeId}:${canonicalDatedToken(parsed.assignmentToken)}`;
+}
+
+export function compareDatedSourcePriority(left, right) {
+  const score = file => {
+    const name = String(file.name ?? '');
+    const bare = new RegExp(`^\\d{8}[_\\s-][a-z]?\\d+(?:_[a-z0-9]+)*\\.${IMAGE_EXTENSION_SOURCE}$`, 'i').test(name);
+    return Number(bare);
+  };
+  return Number(right.sourceLayout === 'month-flat') - Number(left.sourceLayout === 'month-flat')
+    || score(right) - score(left)
+    || String(left.name).localeCompare(String(right.name), 'en')
+    || String(left.relativePath ?? left.absolutePath ?? '').localeCompare(String(right.relativePath ?? right.absolutePath ?? ''), 'en');
+}
+
+export function selectDatedSources(library, identityMarkers = []) {
+  for (const [episodeId, episode] of Object.entries(library.episodes ?? {})) {
+    if (!/^\d{8}$/.test(episodeId)) continue;
+    const selected = new Map();
+    const others = [];
+    for (const file of episode.files ?? []) {
+      const identity = datedFileIdentity(file, identityMarkers);
+      if (!identity) { others.push(file); continue; }
+      const existing = selected.get(identity);
+      if (!existing || compareDatedSourcePriority(file, existing) < 0) selected.set(identity, file);
+    }
+    episode.files = [...selected.values(), ...others];
+    const preferred = episode.files.find(file => file.sourceLayout === 'month-flat');
+    if (preferred) {
+      episode.layout = 'month-flat';
+      episode.source = preferred.source;
+    }
+  }
 }
 
 export function getImageFileMetadata(file) {
@@ -109,7 +151,7 @@ export function getImageFileAssignments(file) {
     : [];
 }
 
-// Convert <date>_<variant><page>[..._x].jpg to <date>_<page><variant>[..._x].jpg
+// Convert source names to <date>_<page><variant>.jpg
 // so Reading-folder files sort by page number first, keeping variants adjacent
 // for better NeeView prefetch while switching variants.
 export function toReadingFileName(fileName, assignment = null) {
@@ -127,7 +169,7 @@ export function toReadingFileName(fileName, assignment = null) {
   if (!variant || !Number.isInteger(pageNumber) || pageNumber < 1) return fileName;
   const extMatch = fileName.match(IMAGE_EXTENSION_PATTERN);
   const ext = extMatch ? extMatch[0] : '.jpg';
-  return `${parsed.episodeId}_${pageNumber}${variant}${parsed.hasVariantSuffix ? '_x' : ''}${ext}`;
+  return `${parsed.episodeId}_${pageNumber}${variant}${ext}`;
 }
 
 export function compareImageFilenames(leftName, rightName) {
@@ -159,11 +201,6 @@ export function compareImageFilenames(leftName, rightName) {
   const pageComparison = left.pageNumber - right.pageNumber;
   if (pageComparison !== 0) {
     return pageComparison;
-  }
-
-  const suffixComparison = Number(left.hasVariantSuffix) - Number(right.hasVariantSuffix);
-  if (suffixComparison !== 0) {
-    return suffixComparison;
   }
 
   return leftName.localeCompare(rightName);

@@ -5,7 +5,7 @@ import {
   normalizeVariantName
 } from './variant-assignment-model.js';
 
-const SOURCE_IMAGE_PATTERN = /^(\d{8})_([a-z])(\d+)(?:_x)?\.(?:jpe?g|png|webp|gif|bmp|tiff?|avif)$/i;
+const SOURCE_IMAGE_PATTERN = /^(\d{8})_([a-z])(\d+)\.(?:jpe?g|png|webp|gif|bmp|tiff?|avif)$/i;
 export const DEFAULT_PEEK_SETTINGS = Object.freeze({ radius: 112, feather: 14, animationSpeed: 100 });
 let assetUrlResolver = null;
 
@@ -176,16 +176,17 @@ export function getAdjacentEntry(model, variant, page, direction) {
   return pages[index + Math.sign(direction)] ?? null;
 }
 
-export function getImageUrl(episodeId, index) {
+export function getImageUrl(episodeId, index, identity = null) {
   const resolved = assetUrlResolver?.('image', episodeId, Number(index));
   if (resolved) return resolved;
-  return `/api/image?episodeId=${encodeURIComponent(episodeId)}&index=${Number(index)}`;
+  const key = identity == null ? '' : `&file=${encodeURIComponent(String(identity))}`;
+  return `/api/image?episodeId=${encodeURIComponent(episodeId)}&index=${Number(index)}${key}`;
 }
 
 export function getThumbnailUrl(episodeId, index, identity = null) {
   const resolved = assetUrlResolver?.('thumbnail', episodeId, Number(index), identity);
   if (resolved) return resolved;
-  const key = identity == null ? '' : `&key=${encodeURIComponent(String(identity))}`;
+  const key = identity == null ? '' : `&file=${encodeURIComponent(String(identity))}`;
   return `/api/thumbnail?episodeId=${encodeURIComponent(episodeId)}&index=${Number(index)}${key}`;
 }
 

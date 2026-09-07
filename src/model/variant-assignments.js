@@ -7,11 +7,12 @@ import {
   normalizePeekRelations,
   normalizeVariantAssignments
 } from '../../public/variant-assignment-model.js';
-import { getVariantAssignmentToken, parseImageFilename } from '../validation/filename.js';
+import { getVariantAssignmentToken, parseImageFilename, parseUndatedImageFilename, selectDatedSources } from '../validation/filename.js';
 import { getEffectiveVariantSources } from './effective-variants.js';
 
 export function applyVariantAssignments(library, input, identityMarkers = []) {
   const state = normalizeVariantAssignments(input);
+  selectDatedSources(library, identityMarkers);
 
   for (const [episodeId, episode] of Object.entries(library.episodes ?? {})) {
     const assignments = state.episodes[episodeId] ?? Object.fromEntries(DEFAULT_VARIANT_NAMES.map((variant) => [variant, []]));
@@ -21,11 +22,7 @@ export function applyVariantAssignments(library, input, identityMarkers = []) {
     const tokenCounts = new Map();
 
     for (const file of episode.files ?? []) {
-      const parsed = parseImageFilename(file.name, identityMarkers) ?? (file.assignmentToken ? {
-        pageNumber: Number(file.sourcePageNumber) || 1,
-        assignmentToken: file.assignmentToken,
-        variant: null
-      } : null);
+      const parsed = /^\d{8}$/.test(episodeId) ? parseImageFilename(file.name, identityMarkers) : parseUndatedImageFilename(file.name, identityMarkers);
       if (!parsed) continue;
       file.sourcePageNumber = parsed.pageNumber;
       file.assignmentToken = getVariantAssignmentToken(parsed);

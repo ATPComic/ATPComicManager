@@ -1,5 +1,6 @@
 import { storageFor } from '../storage/database.js';
 import { isValidEpisodeId } from '../../public/variant-assignment-model.js';
+import { datedFileIdentity } from '../validation/filename.js';
 
 export function createEmptyLibrary() {
   return {
@@ -74,7 +75,7 @@ function importedFile(file) {
   return { ...portable, missing: true, absolutePath: null, source: null };
 }
 
-export function mergeSharedLibrary(library, sharedLibrary) {
+export function mergeSharedLibrary(library, sharedLibrary, identityMarkers = []) {
   for (const [episodeId, sharedEpisode] of Object.entries(sharedLibrary?.episodes ?? {})) {
     if (!isValidEpisodeId(episodeId) || !sharedEpisode || typeof sharedEpisode !== 'object') continue;
     const sharedFiles = Array.isArray(sharedEpisode.files) ? sharedEpisode.files : [];
@@ -95,8 +96,9 @@ export function mergeSharedLibrary(library, sharedLibrary) {
       });
     }
     const localNames = new Set((episode.files ?? []).map((file) => file.name));
+    const localIdentities = new Set(/^\d{8}$/.test(episodeId) ? (episode.files ?? []).map(file => datedFileIdentity(file, identityMarkers)).filter(Boolean) : []);
     for (const file of sharedFiles) {
-      if (localNames.has(file?.name)) continue;
+      if (localNames.has(file?.name) || localIdentities.has(datedFileIdentity(file, identityMarkers))) continue;
       episode.files.push(importedFile(file));
       library.warnings.push({
         type: 'missing-imported-image', severity: 'warning', episodeId, path: file?.relativePath ?? file?.name ?? null,

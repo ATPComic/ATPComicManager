@@ -25,5 +25,5 @@ export function sortEpisodeIds(values) {
 }
 
 export function getFolderBaseName(folderName) {
-  return folderName.endsWith('_x') ? folderName.slice(0, -2) : folderName;
+  return folderName;
 }

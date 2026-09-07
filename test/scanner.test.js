@@ -21,7 +21,7 @@ test('scans folder layout and reports validation issues', async () => {
 
   const library = await scanArchive(archive, root);
   assert.ok(library.episodes['20240105']);
-  assert.match(JSON.stringify(library.warnings), /folder-conflict/);
+  assert.ok(!JSON.stringify(library.warnings).includes('folder-conflict'));
   assert.match(JSON.stringify(library.warnings), /folder-file-date-mismatch/);
   assert.match(JSON.stringify(library.warnings), /missing-pages/);
 });
@@ -101,7 +101,7 @@ test('mixed default and manual names stay fully editable by stable suffix token'
   }
 
   const defaults = await scanArchive(archive, root);
-  assert.deepEqual(defaults.episodes['20250401'].variants, { a: [1, 2], b: [1, 2], c: [] });
+  assert.deepEqual(defaults.episodes['20250401'].variants, { a: [1, 2], b: [2], c: [] });
   assert.deepEqual(defaults.episodes['20250501'].variants, { a: [1, 2], b: [], c: [] });
   assert.deepEqual(new Set(defaults.episodes['20250401'].files.map((file) => file.assignmentToken)), new Set(['a1', 'a2', 'b1_x', 'b2', 'b2_sp']));
   assert.deepEqual(new Set(defaults.episodes['20250501'].files.map((file) => file.assignmentToken)), new Set(['a1', 'a2', '1_x', '2', '3']));

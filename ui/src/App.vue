@@ -38,7 +38,7 @@ import TagFilterControl from './components/TagFilterControl.vue';
 import DateFilterControl from './components/DateFilterControl.vue';
 import EpisodeDateControl from './components/EpisodeDateControl.vue';
 import { chooseAndroidLibrary, isAndroidApp, nativeAssetUrl, requestJson } from './api.js';
-import { navigateToPage, returnPathFromHref } from './navigation.js';
+import { navigateToPage, returnPathFromHref, variantEpisodePath } from './navigation.js';
 import { tagCategoryStyle as getTagCategoryStyle } from './tag-colors.js';
 import { EPISODE_DRAG_TYPE, draggedEpisodeId, compareEpisodesByDate, countTagEpisodes, matchesDateFilter, matchesTagFilter, moveItemToSlot } from '../../public/collection-model.js';
 import { locale, t } from '../../public/i18n.js';
@@ -52,6 +52,7 @@ import {
 import { getVirtualWindow } from '../../public/virtual-list.js';
 
 const READER_SETTINGS_KEY = 'comic-manager.reader-settings';
+const layoutLabel = layout => t(({ 'month-flat': 'layoutMonthly', folder: 'layoutDaily', 'rule-folder': 'layoutCustom' })[layout] ?? 'layoutUnknown');
 const ROW_HEIGHT = 100;
 const COLLECTION_PREVIEW_LIMIT = 8;
 const desktopWindowControls = Boolean(window.atpDesktop?.controlWindow);
@@ -223,7 +224,7 @@ const filterScopeEpisodeIds = computed(() => {
     if (!query) return true;
     const episode = state.library.episodes[episodeId] ?? {};
     const tags = flattenTags(state.tags.episodeTags[episodeId]).join(' ');
-    return [episodeId, episode.title, episode.date, episode.layout, themes.join(' '), variantSummary(episode), tags]
+    return [episodeId, episode.title, episode.date, layoutLabel(episode.layout), themes.join(' '), variantSummary(episode), tags]
       .join(' ')
       .toLowerCase()
       .includes(query);
@@ -404,7 +405,7 @@ function goTo(path) {
 }
 
 function openVariantAssignments(episodeId) {
-  navigateToPage(`/variants.html?episode=${encodeURIComponent(episodeId)}`);
+  window.location.assign(variantEpisodePath(episodeId));
 }
 
 async function focusEpisodeInList(episodeId) {
@@ -418,6 +419,7 @@ async function focusEpisodeInList(episodeId) {
   const index = filteredEpisodeIds.value.indexOf(episodeId);
   if (index < 0) return;
   state.selectedEpisodeId = episodeId;
+  if (portraitReaderMode.matches) mobileCollectionOpen.value = true;
   await nextTick();
   const element = listRef.value;
   if (!element) return;
@@ -836,6 +838,8 @@ onMounted(async () => {
   resizeObserver.observe(listRef.value);
   try {
     await loadState();
+    pageLoading.value = false;
+    await nextTick();
     const focusedEpisode = pendingFocusedEpisodeId;
     pendingFocusedEpisodeId = null;
     if (focusedEpisode && state.library.episodes[focusedEpisode]) {
@@ -948,7 +952,7 @@ onBeforeUnmount(() => {
               <img
                 v-for="episodeId in collectionPreview(theme).ids"
                 :key="episodeId"
-                :src="getThumbnailUrl(episodeId, 0)"
+                :src="getThumbnailUrl(episodeId, 0, state.library.episodes[episodeId]?.files[0]?.assetKey)"
                 alt=""
                 loading="lazy"
                 decoding="async"
@@ -1036,7 +1040,7 @@ onBeforeUnmount(() => {
                   <img
                     v-for="index in thumbIndexes(state.library.episodes[row.episodeId])"
                     :key="index"
-                    :src="getThumbnailUrl(row.episodeId, index)"
+                    :src="getThumbnailUrl(row.episodeId, index, state.library.episodes[row.episodeId]?.files[index]?.assetKey)"
                     alt=""
                     loading="lazy"
                     decoding="async"
@@ -1052,7 +1056,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="episode-meta">
                   <span>{{ t('items', { count: state.library.episodes[row.episodeId]?.files?.length ?? 0 }) }}</span>
-                  <span>{{ state.library.episodes[row.episodeId]?.layout ?? 'unknown' }}</span>
+                  <span>{{ layoutLabel(state.library.episodes[row.episodeId]?.layout) }}</span>
                   <span v-if="warningsForEpisode(row.episodeId).length" class="warning">{{ t('issueCount', { count: warningsForEpisode(row.episodeId).length }) }}</span>
                 </div>
                 <div class="episode-supporting">

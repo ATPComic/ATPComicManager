@@ -8,7 +8,7 @@ import { getFolderBaseName, relativePosixPath, toPosixPath } from '../utils/path
 import { discoverArchiveRoots } from './discovery.js';
 import { matchesRecognitionRule } from '../recognition-store.js';
 
-const FOLDER_PATTERN = /^\d{8}(?:_x)?$/;
+const FOLDER_PATTERN = /^\d{8}$/;
 const MONTH_PATTERN = /^\d{6}$/;
 
 async function readDirectoryEntries(rootPath) {
@@ -31,7 +31,7 @@ function registerFile(library, episodeId, fileRecord, layout, sourcePath, parsed
     source: sourcePath,
     layout
   });
-  episode.files.push(fileRecord);
+  episode.files.push({ ...fileRecord, sourceLayout: layout });
   const parsed = parsedInput ?? parseImageFilename(fileRecord.name);
   if (parsed?.variant) {
     if (!episode.variants[parsed.variant]) episode.variants[parsed.variant] = [];
@@ -75,36 +75,10 @@ async function scanUndatedFolder(library, archiveRoot, workspaceRoot, folderEntr
   }
 }
 
-function addFolderConflictWarning(library, episodeId, leftPath, rightPath) {
-  addLibraryWarning(library, {
-    type: 'folder-conflict',
-    severity: 'warning',
-    episodeId,
-    path: leftPath,
-    relatedPaths: [rightPath],
-    message: `Folder conflict between ${path.basename(leftPath)} and ${path.basename(rightPath)}`
-  });
-}
-
-function addFileConflictWarning(library, episodeId, leftPath, rightPath) {
-  addLibraryWarning(library, {
-    type: 'file-conflict',
-    severity: 'warning',
-    episodeId,
-    path: leftPath,
-    relatedPaths: [rightPath],
-    message: `File conflict between ${path.basename(leftPath)} and ${path.basename(rightPath)}`
-  });
-}
-
 async function scanEpisodeFolder(library, archiveRoot, folderEntry, identityMarkers) {
   const folderPath = path.join(archiveRoot, folderEntry.name);
   const baseEpisodeId = getFolderBaseName(folderEntry.name);
   const files = await collectFiles(folderPath);
-  const conflictFolder = `${baseEpisodeId}_x`;
-  if (folderEntry.name === baseEpisodeId && await exists(path.join(archiveRoot, conflictFolder))) {
-    addFolderConflictWarning(library, baseEpisodeId, folderPath, path.join(archiveRoot, conflictFolder));
-  }
 
   const fileByKey = new Map();
   for (const fileName of files) {
@@ -160,11 +134,6 @@ async function scanEpisodeFolder(library, archiveRoot, folderEntry, identityMark
   for (const [key, paths] of fileByKey.entries()) {
     if (paths.length > 1) {
       const [episodeId, variant, pageNumber] = key.split(':');
-      const hasX = paths.some((item) => /_x\.(?:jpe?g|png|webp|gif|bmp|tiff?|avif)$/i.test(item));
-      const hasPlain = paths.some((item) => !/_x\.(?:jpe?g|png|webp|gif|bmp|tiff?|avif)$/i.test(item));
-      if (hasX && hasPlain) {
-        addFileConflictWarning(library, episodeId, paths[0], paths[1]);
-      }
       addLibraryWarning(library, {
         type: 'duplicate-page-number',
         severity: 'warning',
@@ -244,15 +213,6 @@ async function scanMonthFolder(library, archiveRoot, folderEntry, identityMarker
         message: `Duplicate page number ${variant}${pageNumber}`
       });
     }
-  }
-}
-
-async function exists(targetPath) {
-  try {
-    await fs.access(targetPath);
-    return true;
-  } catch {
-    return false;
   }
 }
 

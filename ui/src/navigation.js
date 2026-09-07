@@ -17,6 +17,11 @@ export function libraryEpisodePath(episodeId) {
   return episodeId ? `/?focus=${encodeURIComponent(episodeId)}` : '/';
 }
 
+export function variantEpisodePath(episodeId) {
+  const params = new URLSearchParams({ episode: episodeId, returnTo: libraryEpisodePath(episodeId) });
+  return `/variants.html?${params}`;
+}
+
 export function returnPathFromHref(href, fallback = '/') {
   const returnTo = new URL(href, 'http://app.local').searchParams.get('returnTo');
   return returnTo?.startsWith('/') && !returnTo.startsWith('//') ? returnTo : fallback;

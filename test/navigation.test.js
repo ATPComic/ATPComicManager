@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { currentAppPath, libraryEpisodePath, returnPathFromHref } from '../ui/src/navigation.js';
+import { currentAppPath, libraryEpisodePath, returnPathFromHref, variantEpisodePath } from '../ui/src/navigation.js';
+
+test('variant links return to the originating gallery episode including encoded folder IDs', () => {
+  for (const id of ['20260101', 'folder:Archive/Set One']) {
+    const href = variantEpisodePath(id);
+    assert.equal(new URL(href, 'http://app.local').searchParams.get('episode'), id);
+    assert.equal(returnPathFromHref(href), libraryEpisodePath(id));
+  }
+});
 
 test('current application path preserves query parameters and fragments', () => {
   assert.equal(currentAppPath({ pathname: '/warnings.html', search: '?type=file', hash: '#row' }), '/warnings.html?type=file#row');

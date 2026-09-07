@@ -5,7 +5,7 @@ import { getVariantAssignmentToken, parseImageFilename, toReadingFileName } from
 test('toReadingFileName moves the variant letter after the page number', () => {
   assert.equal(toReadingFileName('20240105_a1.jpg'), '20240105_1a.jpg');
   assert.equal(toReadingFileName('20240105_b12.jpg'), '20240105_12b.jpg');
-  assert.equal(toReadingFileName('20240105_c3_x.jpg'), '20240105_3c_x.jpg');
+  assert.equal(toReadingFileName('20240105_c3_x.jpg'), '20240105_c3_x.jpg');
   assert.equal(toReadingFileName('20240105_A2.JPG'), '20240105_2a.JPG');
   assert.equal(toReadingFileName('notes.txt'), 'notes.txt');
 });
@@ -43,12 +43,12 @@ test('explicit source names accept custom single-letter variants', () => {
 test('source names use only the leading date and trailing sequence token', () => {
   const examples = [
     ['20250401_useless_info_a2.jpg', 'a', 2, false, 'a2'],
-    ['20250401_info_b1_x.jpg', 'b', 1, true, 'b1_x'],
+    ['20250401_info_b1_x.jpg', null, 1, false, 'b1_x'],
     ['20250401_uselessinfo_A1.jpg', 'a', 1, false, 'a1'],
     ['20250401_some_info_b2_sp.jpg', null, 2, false, 'b2_sp'],
     ['20250501_useless_info_2.jpg', null, 2, false, '2'],
     ['20250501_some_info_3.jpg', null, 3, false, '3'],
-    ['20250501_info_1_x.jpg', null, 1, true, '1_x']
+    ['20250501_info_1_x.jpg', null, 1, false, '1_x']
   ];
   for (const [fileName, variant, pageNumber, hasVariantSuffix, token] of examples) {
     const parsed = parseImageFilename(fileName);
@@ -95,7 +95,7 @@ test('manual assignments control canonical reading names without retaining middl
   );
   assert.equal(
     toReadingFileName('20250401_info_1_x.jpg', { variant: 'c', pageNumber: 4 }),
-    '20250401_4c_x.jpg'
+    '20250401_4c.jpg'
   );
 });
 
@@ -115,7 +115,7 @@ test('special variant suffixes remain complete manual-assignment tokens', () => 
     pageNumber: 2,
     fileName: '20250401_middle_b2_sp2_x.jpg',
     assignmentToken: 'b2_sp2_x',
-    hasVariantSuffix: true,
+    hasVariantSuffix: false,
     requiresVariantAssignment: true
   });
 
@@ -134,6 +134,6 @@ test('special variant suffixes remain complete manual-assignment tokens', () => 
   );
   assert.equal(
     toReadingFileName('20250401_middle_b2_sp2_x.jpg', { variant: 'b_sp2', pageNumber: 2 }),
-    '20250401_2b_sp2_x.jpg'
+    '20250401_2b_sp2.jpg'
   );
 });

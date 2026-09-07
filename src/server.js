@@ -5,17 +5,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scanWorkspace } from './scanner/scanner.js';
 import { mergeSharedLibrary, readLibrary, writeLibrary } from './model/library.js';
-import { loadThemes, saveTheme, deleteTheme, renameTheme } from './themes/store.js';
+import { loadThemes, saveTheme, deleteTheme, renameTheme, mergeSharedThemes } from './themes/store.js';
 import { createPlan } from './planner/planner.js';
 import { applyPlan } from './apply/apply.js';
 import { loadTagState, mergeTagStates, saveTagState } from './tag-store.js';
 import { getThumbnailPath } from './thumbnail-cache.js';
-import { loadVariantAssignments, saveVariantAssignments } from './variant-store.js';
+import { loadVariantAssignments, saveVariantAssignments, alignVariantTokens } from './variant-store.js';
 import { normalizeVariantAssignments } from '../public/variant-assignment-model.js';
 import { loadRecognitionState, saveRecognitionState, mergeRecognitionStates } from './recognition-store.js';
 import { loadSharedImport, normalizeSharedImport } from './shared-import-store.js';
 import { initializeStorage } from './storage/initialize.js';
 import { withDatabase } from './storage/database.js';
+import { attachImageReferences, resolveImageReference } from './image-reference.js';
+import { portableLibrary, assertPortableJson } from './shared-export.js';
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const publicRoot = path.join(currentDirectory, '..', 'dist');
@@ -34,17 +36,6 @@ function sendMissingImage(response) {
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1280" viewBox="0 0 960 1280"><rect width="960" height="1280" fill="#18191d"/><path d="M330 520h300v240H330zM390 640l70-70 55 55 45-45 70 90H390z" fill="none" stroke="#73757e" stroke-width="18" stroke-linejoin="round"/><text x="480" y="820" text-anchor="middle" fill="#c5c5ce" font-family="Segoe UI,sans-serif" font-size="34">Missing image</text></svg>';
   response.writeHead(200, { 'content-type': 'image/svg+xml; charset=utf-8', 'cache-control': 'no-store' });
   response.end(svg);
-}
-
-function portableLibrary(library) {
-  const { warnings, errors, ...data } = library;
-  return {
-    ...data,
-    episodes: Object.fromEntries(Object.entries(library?.episodes ?? {}).map(([episodeId, { warnings, errors, source, ...episode }]) => [episodeId, {
-      ...episode,
-      files: (episode.files ?? []).map(({ absolutePath, source, warnings, errors, ...file }) => file)
-    }]))
-  };
 }
 
 function mergeVariantStates(current, imported) {
@@ -128,13 +119,14 @@ export async function startServer(config) {
       if (libraryCache && libraryCacheStamp === stamp) {
         return libraryCache;
       }
-      libraryCache = await readLibrary(config.databasePath);
+      libraryCache = attachImageReferences(await readLibrary(config.databasePath));
       libraryCacheStamp = stamp;
       return libraryCache;
     } catch (error) { throw new Error(`Cannot read library database: ${error.message}`, { cause: error }); }
   }
 
   async function updateLibrary(library) {
+    attachImageReferences(library);
     await writeLibrary(config.databasePath, library);
     libraryCache = library;
     const stat = await fs.stat(config.databasePath);
@@ -142,11 +134,13 @@ export async function startServer(config) {
   }
 
   async function scanLibrary() {
-    const variantAssignments = await loadVariantAssignments(config.databasePath);
+    const storedAssignments = await loadVariantAssignments(config.databasePath);
     const recognition = await loadRecognitionState(config.databasePath);
+    const variantAssignments = alignVariantTokens(storedAssignments, await readLibrary(config.databasePath), recognition.identityMarkers);
+    if (JSON.stringify(variantAssignments) !== JSON.stringify(storedAssignments)) await saveVariantAssignments(config.databasePath, variantAssignments);
     const library = await scanWorkspace(config.workspaceRoot, config.archiveRoot, variantAssignments, recognition);
     const shared = await loadSharedImport(config.databasePath);
-    return shared ? mergeSharedLibrary(library, shared.library) : library;
+    return shared ? mergeSharedLibrary(library, shared.library, recognition.identityMarkers) : library;
   }
 
   const server = createServer(async (request, response) => {
@@ -176,10 +170,10 @@ export async function startServer(config) {
       }
 
       if (url.pathname === '/api/variants' && request.method === 'PUT') {
-        const variantAssignments = await saveVariantAssignments(config.databasePath, await readBody(request));
+        await saveVariantAssignments(config.databasePath, await readBody(request));
         const library = await scanLibrary();
         await updateLibrary(library);
-        sendJson(response, 200, { ok: true, variantAssignments, library });
+        sendJson(response, 200, { ok: true, variantAssignments: await loadVariantAssignments(config.databasePath), library });
         return;
       }
 
@@ -211,10 +205,9 @@ export async function startServer(config) {
 
       if (url.pathname === '/api/image' && request.method === 'GET') {
         const episodeId = url.searchParams.get('episodeId');
-        const index = Number(url.searchParams.get('index') ?? 0);
         const library = await loadLibrary();
         const episode = library.episodes?.[episodeId];
-        const file = episode?.files?.[index];
+        const file = resolveImageReference(episode, url.searchParams);
 
         if (!episodeId || !episode || !file) {
           sendJson(response, 404, { error: 'Image not found' });
@@ -260,9 +253,8 @@ export async function startServer(config) {
 
       if (url.pathname === '/api/thumbnail' && request.method === 'GET') {
         const episodeId = url.searchParams.get('episodeId');
-        const index = Number(url.searchParams.get('index') ?? 0);
         const library = await loadLibrary();
-        const file = library.episodes?.[episodeId]?.files?.[index];
+        const file = resolveImageReference(library.episodes?.[episodeId], url.searchParams);
         if (!episodeId || !file) {
           sendJson(response, 404, { error: 'Image not found' });
           return;
@@ -292,23 +284,28 @@ export async function startServer(config) {
         const tags = await loadTagState(config.databasePath);
         const variants = await loadVariantAssignments(config.databasePath);
         const recognition = await loadRecognitionState(config.databasePath);
-        sendJson(response, 200, { ok: true, export: { library: portableLibrary(library), tags, variants, recognition } });
+        const themes = await loadThemes(config.databasePath);
+        const exported = { library: portableLibrary(library), tags, variants, recognition, themes };
+        assertPortableJson(exported);
+        sendJson(response, 200, { ok: true, export: exported });
         return;
       }
 
       if (url.pathname === '/api/import/json' && request.method === 'POST') {
         const imported = normalizeSharedImport(await readBody(request));
         const tags = mergeTagStates(await loadTagState(config.databasePath), imported.tags);
-        const variants = mergeVariantStates(await loadVariantAssignments(config.databasePath), imported.variants);
+        const variants = mergeVariantStates(await loadVariantAssignments(config.databasePath), alignVariantTokens(imported.variants, imported.library, imported.recognition.identityMarkers));
         const recognition = mergeRecognitionStates(await loadRecognitionState(config.databasePath), imported.recognition);
-        const library = mergeSharedLibrary(await scanWorkspace(config.workspaceRoot,config.archiveRoot,variants,recognition), imported.library);
+        const themes = mergeSharedThemes(await loadThemes(config.databasePath), imported.themes);
+        const library = mergeSharedLibrary(await scanWorkspace(config.workspaceRoot,config.archiveRoot,variants,recognition), imported.library, recognition.identityMarkers);
         withDatabase(config.databasePath, db => db.transaction(() => {
           db.writeLibrary(imported.library,'shared'); db.meta('shared','1');
           db.writeTags(tags); db.writeVariants(variants); db.writeRecognition(recognition); db.writeLibrary(library);
+          for (const theme of themes) db.writeTheme(theme);
         }));
         libraryCache = null;
         const missingCount = (library.warnings ?? []).filter((warning) => warning.type?.startsWith('missing-imported-')).length;
-        sendJson(response, 200, { ok: true, library, tags, variants, recognition, missingCount });
+        sendJson(response, 200, { ok: true, library: attachImageReferences(library), tags, variants, recognition, themes, missingCount });
         return;
       }
 

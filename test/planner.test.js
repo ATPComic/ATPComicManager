@@ -66,7 +66,7 @@ test('manual variant order is reflected in hard-link names without source middle
   assert.deepEqual(targets, [
     fixturePath('Reading/Main/001/20250401_1a.jpg'),
     fixturePath('Reading/Main/001/20250401_2a.jpg'),
-    fixturePath('Reading/Main/001/20250401_1b_x.jpg')
+    fixturePath('Reading/Main/001/20250401_1b.jpg')
   ]);
 });
 

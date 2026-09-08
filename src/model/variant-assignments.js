@@ -7,7 +7,7 @@ import {
   normalizePeekRelations,
   normalizeVariantAssignments
 } from '../../public/variant-assignment-model.js';
-import { getVariantAssignmentToken, parseImageFilename, parseUndatedImageFilename, selectDatedSources } from '../validation/filename.js';
+import { getVariantAssignmentToken, parseImageFilename, parseUndatedImageFilename, selectDatedSources, getAutomaticVariantCandidate, compareDatedSourcePriority } from '../validation/filename.js';
 import { getEffectiveVariantSources } from './effective-variants.js';
 
 export function applyVariantAssignments(library, input, identityMarkers = []) {
@@ -20,13 +20,29 @@ export function applyVariantAssignments(library, input, identityMarkers = []) {
     const hasAuthoritativeAssignments = state.version >= 3 && Object.hasOwn(state.episodes, episodeId);
     const variantNames = new Set(getEpisodeVariantNames(assignments));
     const tokenCounts = new Map();
+    const parsedFiles = new Map((episode.files ?? []).map(file => [file, /^\d{8}$/.test(episodeId) ? parseImageFilename(file.name, identityMarkers) : parseUndatedImageFilename(file.name, identityMarkers)]));
+    const automatic = new Map();
+    if (!hasAuthoritativeAssignments) {
+      for (const [file, parsed] of parsedFiles) {
+        const candidate = getAutomaticVariantCandidate(file.name, parsed, identityMarkers);
+        if (!candidate) continue;
+        const key = `${candidate.variant}:${candidate.pageNumber}`;
+        const existing = automatic.get(key);
+        const priority = existing ? Number(existing.file.sourceLayout === 'month-flat') - Number(file.sourceLayout === 'month-flat')
+          || candidate.suffixLength - existing.candidate.suffixLength
+          || compareDatedSourcePriority(file, existing.file) : -1;
+        if (priority < 0) automatic.set(key, { file, candidate });
+      }
+    }
+    const selectedAutomatic = new Map([...automatic.values()].map(({file, candidate}) => [file, candidate]));
 
     for (const file of episode.files ?? []) {
-      const parsed = /^\d{8}$/.test(episodeId) ? parseImageFilename(file.name, identityMarkers) : parseUndatedImageFilename(file.name, identityMarkers);
+      const parsed = parsedFiles.get(file);
       if (!parsed) continue;
       file.sourcePageNumber = parsed.pageNumber;
       file.assignmentToken = getVariantAssignmentToken(parsed);
       const manual = file.assignmentToken ? findVariantAssignments(assignments, file.assignmentToken) : [];
+      const automaticCandidate = selectedAutomatic.get(file);
       file.assignments = manual.length
         ? manual.map(({ variant, index }) => {
           const mappedPageNumber = Number(pageMappings[variant]?.[file.assignmentToken]);
@@ -37,8 +53,8 @@ export function applyVariantAssignments(library, input, identityMarkers = []) {
               : isSpecialVariantName(variant) ? parsed.pageNumber : index + 1
           };
         })
-        : !hasAuthoritativeAssignments && parsed.variant
-          ? [{ variant: parsed.variant, pageNumber: parsed.pageNumber }]
+        : automaticCandidate
+          ? [{ variant: automaticCandidate.variant, pageNumber: automaticCandidate.pageNumber }]
           : [];
       file.variant = file.assignments[0]?.variant ?? null;
       file.pageNumber = file.assignments[0]?.pageNumber ?? parsed.pageNumber;

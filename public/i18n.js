@@ -3,6 +3,15 @@ import { detectLocale } from './locale.js';
 const dictionaries = {
   'zh-CN': {
     appTitle: 'ATP Comic',
+    unsavedChanges: '尚有未保存的修改',
+    saveBeforeLeaving: '离开前保存修改？点击弹窗外部或按 Esc 可继续编辑。',
+    discardChanges: '不保存',
+    nativeChooseLibrary: '选择图库位置',
+    nativeChooseFolder: '选择此文件夹',
+    nativeSaveLocationFailed: '无法保存图库位置',
+    nativeLocationUnavailable: '所选文件夹不存在或无法访问。',
+    nativeStartupFailed: 'ATP Comic 启动失败',
+    nativeWindowInactive: '应用窗口已关闭。',
     loadingLibrary: '正在读取资料库',
     layoutMonthly: '按月归档',
     layoutDaily: '按日归档',
@@ -264,6 +273,15 @@ const dictionaries = {
     warningDuplicateEpisodeSource: '单集 {episode} 出现在多个扫描来源中'
   },
   'zh-TW': {
+    unsavedChanges: '尚有未儲存的修改',
+    saveBeforeLeaving: '離開前儲存修改？點擊彈窗外部或按 Esc 可繼續編輯。',
+    discardChanges: '不儲存',
+    nativeChooseLibrary: '選擇圖庫位置',
+    nativeChooseFolder: '選擇此資料夾',
+    nativeSaveLocationFailed: '無法儲存圖庫位置',
+    nativeLocationUnavailable: '所選資料夾不存在或無法存取。',
+    nativeStartupFailed: 'ATP Comic 啟動失敗',
+    nativeWindowInactive: '應用程式視窗已關閉。',
     appTitle: 'ATP Comic',
     loadingLibrary: '正在載入圖庫',
     layoutMonthly: '按月歸檔',
@@ -526,6 +544,15 @@ const dictionaries = {
     warningDuplicateEpisodeSource: '單集 {episode} 出現在多個掃描來源中'
   },
   en: {
+    unsavedChanges: 'Unsaved changes',
+    saveBeforeLeaving: 'Save changes before leaving? Click outside this dialog or press Esc to keep editing.',
+    discardChanges: 'Discard',
+    nativeChooseLibrary: 'Choose library location',
+    nativeChooseFolder: 'Select folder',
+    nativeSaveLocationFailed: 'Unable to save library location',
+    nativeLocationUnavailable: 'The selected folder does not exist or cannot be accessed.',
+    nativeStartupFailed: 'ATP Comic could not start',
+    nativeWindowInactive: 'The application window has closed.',
     appTitle: 'ATP Comic',
     loadingLibrary: 'Loading library',
     layoutMonthly: 'Monthly archive',
@@ -788,6 +815,15 @@ const dictionaries = {
     warningDuplicateEpisodeSource: 'Episode {episode} appears in multiple scan roots'
   },
   ja: {
+    unsavedChanges: '未保存の変更',
+    saveBeforeLeaving: '移動する前に変更を保存しますか？ダイアログの外側をクリックするか Esc キーを押すと編集を続けられます。',
+    discardChanges: '保存しない',
+    nativeChooseLibrary: 'ライブラリの場所を選択',
+    nativeChooseFolder: 'このフォルダーを選択',
+    nativeSaveLocationFailed: 'ライブラリの場所を保存できません',
+    nativeLocationUnavailable: '選択したフォルダーが存在しないか、アクセスできません。',
+    nativeStartupFailed: 'ATP Comic を起動できません',
+    nativeWindowInactive: 'アプリのウィンドウは閉じられました。',
     appTitle: 'ATP Comic',
     loadingLibrary: 'ライブラリを読み込み中',
     layoutMonthly: '月別フォルダー',
@@ -1053,7 +1089,7 @@ const dictionaries = {
 
 export const locale = detectLocale();
 
-export function t(key, values = {}) {
-  const template = dictionaries[locale]?.[key] ?? dictionaries.en[key] ?? key;
+export function t(key, values = {}, language = locale) {
+  const template = dictionaries[language]?.[key] ?? dictionaries.en[key] ?? key;
   return Object.entries(values).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), template);
 }

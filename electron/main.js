@@ -5,6 +5,8 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { startServer } from '../src/server.js';
 import { parseArgs, resolveWorkspaceConfig } from '../src/utils/cli.js';
 import { resolveDefaultWorkspace } from './workspace-path.js';
+import { t } from '../public/i18n.js';
+import { resolveLocale, supportedLocales } from '../public/locale.js';
 
 const SETTINGS_FILE = 'desktop-settings.json';
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -16,6 +18,8 @@ let mainWindow = null;
 let promptLibraryLocation = false;
 let server = null;
 let shuttingDown = false;
+let interfaceLocale = null;
+const nativeText = key => t(key, {}, interfaceLocale ?? resolveLocale({ systemLocales: app.getPreferredSystemLanguages() }));
 
 function commandLineArgs() {
   const values = process.argv.slice(app.isPackaged ? 1 : 2);
@@ -67,9 +71,12 @@ async function saveWorkspace(workspaceRoot) {
 }
 
 function registerWorkspaceHandlers() {
+  ipcMain.on('interface-locale', (event, value) => {
+    if (mainWindow && event.sender === mainWindow.webContents && supportedLocales.includes(value)) interfaceLocale = value;
+  });
   ipcMain.handle('library-location:get-state', (event) => {
     if (!mainWindow || event.sender !== mainWindow.webContents) {
-      throw new Error('Application window is no longer active.');
+      throw new Error(nativeText('nativeWindowInactive'));
     }
     return {
       defaultLibraryLocation: defaultWorkspace(),
@@ -78,11 +85,11 @@ function registerWorkspaceHandlers() {
   });
   ipcMain.handle('library-location:choose', async (event, currentPath) => {
     if (!mainWindow || event.sender !== mainWindow.webContents) {
-      throw new Error('Application window is no longer active.');
+      throw new Error(nativeText('nativeWindowInactive'));
     }
     const result = await dialog.showOpenDialog(mainWindow, {
-      title: '选择图库位置',
-      buttonLabel: '选择此文件夹',
+      title: nativeText('nativeChooseLibrary'),
+      buttonLabel: nativeText('nativeChooseFolder'),
       defaultPath: await isDirectory(currentPath) ? currentPath : defaultWorkspace(),
       properties: ['openDirectory', 'createDirectory']
     });
@@ -90,7 +97,7 @@ function registerWorkspaceHandlers() {
   });
   ipcMain.handle('library-location:change', async (event, selectedPath) => {
     if (!mainWindow || event.sender !== mainWindow.webContents) {
-      throw new Error('Application window is no longer active.');
+      throw new Error(nativeText('nativeWindowInactive'));
     }
     await changeWorkspace(selectedPath);
     return { ok: true };
@@ -195,7 +202,7 @@ async function activateWorkspace(workspaceRoot, { persist = true, show = true } 
     try {
       await saveWorkspace(currentWorkspace);
     } catch (error) {
-      dialog.showErrorBox('无法保存图库位置', error.stack ?? error.message ?? String(error));
+      dialog.showErrorBox(nativeText('nativeSaveLocationFailed'), error.stack ?? error.message ?? String(error));
     }
   }
   await closeServer(previousServer);
@@ -206,7 +213,7 @@ async function changeWorkspace(selectedPath) {
   if (!selectedPath) return;
   const selected = path.resolve(String(selectedPath ?? ''));
   if (!await isDirectory(selected)) {
-    throw new Error('所选文件夹不存在或无法访问。');
+    throw new Error(nativeText('nativeLocationUnavailable'));
   }
   if (selected === currentWorkspace) {
     promptLibraryLocation = false;
@@ -380,7 +387,7 @@ if (!app.requestSingleInstanceLock()) {
         app.exit(1);
         return;
       }
-      dialog.showErrorBox('ATP Comic 启动失败', error.stack ?? error.message ?? String(error));
+      dialog.showErrorBox(nativeText('nativeStartupFailed'), error.stack ?? error.message ?? String(error));
       app.quit();
     });
 }

@@ -2,9 +2,8 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { isImageFile, parseImageFilename } from '../validation/filename.js';
 import { matchesRecognitionRule } from '../recognition-store.js';
+import { matchArchiveFolderName } from '../utils/path.js';
 
-const FOLDER_PATTERN = /^\d{8}$/;
-const MONTH_PATTERN = /^\d{6}$/;
 const IGNORED_DIRECTORY_NAMES = new Set(['Reading', 'themes', 'node_modules', '.git', '.vscode']);
 const MAX_DISCOVERY_DEPTH = 5;
 
@@ -20,7 +19,7 @@ async function looksLikeArchiveRoot(directoryPath, rules) {
   const entries = await readEntries(directoryPath);
   return entries.some((entry) => {
     if (entry.isDirectory()) {
-      return FOLDER_PATTERN.test(entry.name) || MONTH_PATTERN.test(entry.name) || matchesRecognitionRule(entry.name, rules);
+      return Boolean(matchArchiveFolderName(entry.name)) || matchesRecognitionRule(entry.name, rules);
     }
     if (entry.isFile()) {
       return isImageFile(entry.name) && parseImageFilename(entry.name) !== null;

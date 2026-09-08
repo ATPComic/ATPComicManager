@@ -44,8 +44,9 @@ const components = [
   Switch
 ];
 
-export function installVarlet(app, locale = 'zh-CN') {
-  Locale.use({ en: 'en-US', ja: 'ja-JP' }[locale] ?? 'zh-CN');
+export function installVarlet(app, locale = 'en') {
+  window.atpDesktop?.setLocale?.(locale);
+  Locale.use({ en: 'en-US', ja: 'ja-JP', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' }[locale] ?? 'en-US');
   components.forEach((component) => app.use(component));
   return app;
 }

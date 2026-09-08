@@ -59,6 +59,13 @@ export function getVariantAssignmentToken(parsed) {
   return parsed?.assignmentToken ?? null;
 }
 
+export function getAutomaticVariantCandidate(fileName, parsed, identityMarkers = []) {
+  if (!parsed || getIdentityMarkers(String(fileName).replace(IMAGE_EXTENSION_PATTERN, ''), identityMarkers).length) return null;
+  const match = parsed.assignmentToken?.match(/^([a-z])(\d+)(.*)$/i);
+  if (!match) return null;
+  return { variant: match[1].toLowerCase(), pageNumber: Number(match[2]), suffixLength: match[3].length };
+}
+
 export function canonicalDatedToken(token) {
   return String(token ?? '').toLowerCase().replace(/^([a-z]?)(\d+)/, (_, letter, page) => `${letter}${Number(page)}`);
 }

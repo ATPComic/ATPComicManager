@@ -18,6 +18,7 @@ import MdiIcon from './components/MdiIcon.vue';
 import TagTreeEditor from './components/TagTreeEditor.vue';
 import { requestJson } from './api.js';
 import { returnFromPage } from './navigation.js';
+import { useUnsavedEdits } from './use-unsaved-edits.js';
 import {
   TAG_CATEGORY_COLORS,
   normalizeCategoryColor,
@@ -34,6 +35,7 @@ const state = reactive({
 });
 const selectedLocale = ref(locale);
 const draftCategories = ref([]);
+const edits = useUnsavedEdits(() => JSON.stringify(draftCategories.value), saveTags);
 const colorMenuId = ref(null);
 const draggedCategoryIndex = ref(null);
 const categoryDropIndex = ref(null);
@@ -158,7 +160,10 @@ async function loadState({ resetDraft = true } = {}) {
   const payload = await requestJson('/api/state');
   state.tags = payload.tags ?? state.tags;
   state.themes = payload.themes ?? [];
-  if (resetDraft) draftCategories.value = initialCategories(state.tags.categories ?? []);
+  if (resetDraft) {
+    draftCategories.value = initialCategories(state.tags.categories ?? []);
+    edits.markSaved();
+  }
 }
 
 async function saveTags() {
@@ -186,16 +191,20 @@ async function saveTags() {
     }));
     await loadState();
     Snackbar.success({ content: t('savedTags'), position: 'bottom' });
+    return true;
   } catch (error) {
     Snackbar.error({ content: t('saveTagsFailed', { message: error.message }), position: 'bottom' });
+    return false;
   } finally {
     state.busy = false;
   }
 }
 
 function changeLocale(value) {
-  localStorage.setItem('comic-manager.locale', value);
-  window.location.reload();
+  return edits.leave(() => {
+    localStorage.setItem('comic-manager.locale', value);
+    window.location.reload();
+  });
 }
 
 const pageLoading = ref(true);
@@ -216,7 +225,7 @@ onMounted(async () => {
   <div class="tag-page-shell">
     <header class="top-app-bar tag-app-bar">
       <div class="page-app-leading">
-        <var-button round text :aria-label="t('back')" @click="returnFromPage('/')"><MdiIcon :path="mdiChevronLeft" /></var-button>
+        <var-button round text :aria-label="t('back')" :disabled="state.busy" @click="edits.leave(() => returnFromPage('/'))"><MdiIcon :path="mdiChevronLeft" /></var-button>
         <MdiIcon :path="mdiTagMultipleOutline" />
         <h1>{{ t('tags') }}</h1>
       </div>

@@ -6,6 +6,7 @@ import { mdiArrowRight, mdiChevronLeft, mdiContentSaveOutline, mdiDeleteOutline,
 import MdiIcon from './components/MdiIcon.vue';
 import LanguageMenu from './components/LanguageMenu.vue';
 import { requestJson } from './api.js';
+import { useUnsavedEdits } from './use-unsaved-edits.js';
 import { libraryEpisodePath, returnFromPage, returnPathFromHref } from './navigation.js';
 import { locale, t } from '../../public/i18n.js';
 import { getThumbnailUrl } from '../../public/reader-model.js';
@@ -40,6 +41,7 @@ const state = reactive({
   touchSourceVariant: null
 });
 const selectedLocale = ref(locale);
+const edits = useUnsavedEdits(() => JSON.stringify(state.assignments), saveAssignments);
 const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
 const initialEpisodeId = new URL(window.location.href).searchParams.get('episode');
 const AUTOMATIC_PEEK_TARGET = '__automatic__';
@@ -409,16 +411,19 @@ async function loadState() {
   ));
   if (initialEpisodeId && episodeIds.value.includes(initialEpisodeId)) state.selectedEpisodeId = initialEpisodeId;
   else if (!episodeIds.value.includes(state.selectedEpisodeId)) state.selectedEpisodeId = episodeIds.value[0] ?? null;
+  edits.markSaved();
 }
 
 async function rescan() {
   if (state.busy) return;
+  if (!await edits.permitLeave()) return;
   state.busy = true;
   try {
     const payload = await requestJson('/api/scan', { method: 'POST', body: '{}' });
     const variants = await requestJson('/api/variants');
     state.library = payload.library ?? state.library;
     state.assignments = cloneData(createVariantAssignmentDraft(variants.variantAssignments, state.library));
+    edits.markSaved();
     if (!episodeIds.value.includes(state.selectedEpisodeId)) state.selectedEpisodeId = episodeIds.value[0] ?? null;
     Snackbar.success({ content: t('scanDone'), position: 'bottom' });
   } catch (error) {
@@ -438,26 +443,35 @@ async function saveAssignments() {
     });
     state.library = payload.library;
     state.assignments = cloneData(createVariantAssignmentDraft(payload.variantAssignments, state.library));
+    edits.markSaved();
     Snackbar.success({ content: t('variantAssignmentsSaved'), position: 'bottom' });
+    return true;
   } catch (error) {
     Snackbar.error({ content: error.message, position: 'bottom' });
+    return false;
   } finally {
     state.busy = false;
   }
 }
 
 function changeLocale(value) {
-  localStorage.setItem('comic-manager.locale', value);
-  window.location.reload();
+  return edits.leave(() => {
+    localStorage.setItem('comic-manager.locale', value);
+    window.location.reload();
+  });
 }
 
 function goBack() {
-  if (returnPathFromHref(window.location.href, null)) return returnFromPage('/');
-  window.location.assign(libraryEpisodePath(state.selectedEpisodeId));
+  if (state.busy) return;
+  return edits.leave(() => {
+    if (returnPathFromHref(window.location.href, null)) return returnFromPage('/');
+    window.location.assign(libraryEpisodePath(state.selectedEpisodeId));
+  });
 }
 
 function viewEpisodeInLibrary() {
-  window.location.assign(libraryEpisodePath(state.selectedEpisodeId));
+  if (state.busy) return;
+  return edits.leave(() => window.location.assign(libraryEpisodePath(state.selectedEpisodeId)));
 }
 
 const pageLoading = ref(true);

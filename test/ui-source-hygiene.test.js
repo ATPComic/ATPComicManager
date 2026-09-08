@@ -7,6 +7,20 @@ import { fileURLToPath } from 'node:url';
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicRoot = path.join(projectRoot, 'public');
 
+test('desktop and UI business sources keep translations out of inline strings', async () => {
+  async function check(directory) {
+    for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name);
+      if (entry.isDirectory()) await check(file);
+      else if (/\.(?:js|cjs|vue)$/.test(entry.name)) {
+        assert.doesNotMatch(await fs.readFile(file, 'utf8'), /\p{Script=Han}/u, `${path.relative(projectRoot, file)} contains untranslated Han text`);
+      }
+    }
+  }
+  await check(path.join(projectRoot, 'electron'));
+  await check(path.join(projectRoot, 'ui', 'src'));
+});
+
 test('business scripts contain neither localized Han text nor embedded SVG source', async () => {
   const fileNames = (await fs.readdir(publicRoot))
     .filter((fileName) => fileName.endsWith('.js') && fileName !== 'i18n.js');

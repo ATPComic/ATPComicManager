@@ -4,12 +4,10 @@ import { createEmptyLibrary, ensureEpisode, addLibraryWarning, mergeLibraryInto 
 import { applyVariantAssignments } from '../model/variant-assignments.js';
 import { isImageFile, parseImageFilename, parseUndatedImageFilename, sortImageFileRecords } from '../validation/filename.js';
 import { validateLibrary } from '../validation/validator.js';
-import { getFolderBaseName, relativePosixPath, toPosixPath } from '../utils/path.js';
+import { getFolderBaseName, matchArchiveFolderName, relativePosixPath, toPosixPath } from '../utils/path.js';
 import { discoverArchiveRoots } from './discovery.js';
 import { matchesRecognitionRule } from '../recognition-store.js';
 
-const FOLDER_PATTERN = /^\d{8}$/;
-const MONTH_PATTERN = /^\d{6}$/;
 
 async function readDirectoryEntries(rootPath) {
   return fs.readdir(rootPath, { withFileTypes: true });
@@ -147,6 +145,7 @@ async function scanEpisodeFolder(library, archiveRoot, folderEntry, identityMark
 }
 
 async function scanMonthFolder(library, archiveRoot, folderEntry, identityMarkers) {
+  const month = matchArchiveFolderName(folderEntry.name).month;
   const folderPath = path.join(archiveRoot, folderEntry.name);
   const files = await collectFiles(folderPath);
   const fileByKey = new Map();
@@ -176,7 +175,7 @@ async function scanMonthFolder(library, archiveRoot, folderEntry, identityMarker
       continue;
     }
 
-    if (!parsed.episodeId.startsWith(folderEntry.name)) {
+    if (!parsed.episodeId.startsWith(month)) {
       addLibraryWarning(library, {
         type: 'folder-file-date-mismatch',
         severity: 'error',
@@ -222,11 +221,11 @@ export async function scanArchive(archiveRoot, workspaceRoot, variantAssignments
   const directories = entries.filter((entry) => entry.isDirectory());
 
   for (const entry of directories) {
-    if (FOLDER_PATTERN.test(entry.name)) {
+    if (matchArchiveFolderName(entry.name)?.layout === 'folder') {
       await scanEpisodeFolder(library, archiveRoot, entry, recognition?.identityMarkers);
       continue;
     }
-    if (MONTH_PATTERN.test(entry.name)) {
+    if (matchArchiveFolderName(entry.name)?.layout === 'month-flat') {
       await scanMonthFolder(library, archiveRoot, entry, recognition?.identityMarkers);
       continue;
     }

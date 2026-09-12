@@ -498,16 +498,16 @@ onMounted(async () => {
       </div>
       <div class="top-actions">
         <var-button size="small" text :loading="state.busy" @click="rescan"><MdiIcon :path="mdiRefresh" />{{ t('scan') }}</var-button>
-        <var-button size="small" type="primary" :loading="state.busy" @click="saveAssignments"><MdiIcon :path="mdiContentSaveOutline" />{{ t('saveAssignments') }}</var-button>
+        <var-button size="small" type="primary" :disabled="pageLoading" :loading="state.busy" @click="saveAssignments"><MdiIcon :path="mdiContentSaveOutline" />{{ t('saveAssignments') }}</var-button>
         <LanguageMenu v-model="selectedLocale" :options="localeOptions" :label="t('language')" @change="changeLocale" />
       </div>
     </header>
 
-    <PageSkeleton v-if="pageLoading" />
-    <main v-show="!pageLoading" class="variant-workspace">
+    <main class="variant-workspace">
       <var-card class="variant-episode-pane" elevation="0">
         <header class="pane-heading"><h2>{{ t('episodes') }}</h2><var-badge :value="episodeIds.length" /></header>
         <div class="variant-episode-list">
+          <PageSkeleton v-if="pageLoading" />
           <var-button
             v-for="episodeId in episodeIds"
             :key="episodeId"
@@ -520,7 +520,7 @@ onMounted(async () => {
             <span>{{ state.library.episodes[episodeId]?.title ?? episodeId }}</span>
             <var-badge :value="unassignedCount(episodeId)" :hidden="!unassignedCount(episodeId)" type="warning" />
           </var-button>
-          <div v-if="!episodeIds.length" class="empty-state">{{ t('noManualVariants') }}</div>
+          <div v-if="!pageLoading && !episodeIds.length" class="empty-state">{{ t('noManualVariants') }}</div>
         </div>
       </var-card>
 
@@ -533,6 +533,7 @@ onMounted(async () => {
             <var-button size="small" outline @click="openAddVariantDialog"><MdiIcon :path="mdiPlus" />{{ t('addVariant') }}</var-button>
           </div>
         </header>
+        <PageSkeleton v-if="pageLoading" />
         <div v-if="activeEpisode" ref="variantBoard" class="variant-board" :style="{ '--variant-column-count': columns.length }">
           <section v-for="column in columns" :key="column ?? 'unassigned'" class="variant-column">
             <header>

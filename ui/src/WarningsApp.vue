@@ -179,8 +179,7 @@ onMounted(async () => {
       </nav>
     </header>
 
-    <PageSkeleton v-if="pageLoading" />
-    <main v-show="!pageLoading" class="warnings-grid">
+    <main class="warnings-grid">
       <var-card class="warning-filter-pane" elevation="1">
         <header class="pane-heading compact"><div><span class="overline">{{ t('filterOverline') }}</span><h2>{{ t('issueTypes') }}</h2></div></header>
         <div class="warning-filter-list">
@@ -201,6 +200,7 @@ onMounted(async () => {
           <span>{{ t('errorsOnly') }}</span>
         </header>
         <div class="warning-list">
+          <PageSkeleton v-if="pageLoading" />
           <var-cell
             v-for="warning in pagedWarnings"
             :key="`${warning.type}:${warning.episodeId}:${warning.path}:${warning.message}`"
@@ -215,7 +215,7 @@ onMounted(async () => {
             <span class="warning-copy"><strong>{{ localizedWarningMessage(warning) }}</strong><small>{{ warning.episodeId }} · {{ warning.path }}</small></span>
             <template #extra><span class="warning-open">{{ t('open') }}<MdiIcon :path="mdiArrowRight" /></span></template>
           </var-cell>
-          <div v-if="!filteredWarnings.length" class="empty-state">{{ t('noIssues') }}</div>
+          <div v-if="!pageLoading && !filteredWarnings.length" class="empty-state">{{ t('noIssues') }}</div>
         </div>
         <footer v-if="filteredWarnings.length" class="pagination-footer">
           <var-pagination

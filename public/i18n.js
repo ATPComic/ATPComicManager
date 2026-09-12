@@ -2,6 +2,14 @@ import { detectLocale } from './locale.js';
 
 const dictionaries = {
   'zh-CN': {
+    discoveryDraw: '扭蛋',
+    discoveryDrawCount: '数量（1–100）',
+    discover: '随机浏览',
+    discoveryMode: '展示方式',
+    discoveryImages: '图片',
+    discoveryCovers: '单集封面',
+    discoveryRefresh: '换一批',
+    discoveryMore: '加载更多',
     appTitle: 'ATP Comic',
     unsavedChanges: '尚有未保存的修改',
     saveBeforeLeaving: '离开前保存修改？点击弹窗外部或按 Esc 可继续编辑。',
@@ -273,6 +281,14 @@ const dictionaries = {
     warningDuplicateEpisodeSource: '单集 {episode} 出现在多个扫描来源中'
   },
   'zh-TW': {
+    discoveryDraw: '扭蛋',
+    discoveryDrawCount: '數量（1–100）',
+    discover: '隨機瀏覽',
+    discoveryMode: '顯示方式',
+    discoveryImages: '圖片',
+    discoveryCovers: '單集封面',
+    discoveryRefresh: '換一批',
+    discoveryMore: '載入更多',
     unsavedChanges: '尚有未儲存的修改',
     saveBeforeLeaving: '離開前儲存修改？點擊彈窗外部或按 Esc 可繼續編輯。',
     discardChanges: '不儲存',
@@ -544,6 +560,14 @@ const dictionaries = {
     warningDuplicateEpisodeSource: '單集 {episode} 出現在多個掃描來源中'
   },
   en: {
+    discoveryDraw: 'Lucky draw',
+    discoveryDrawCount: 'Count (1–100)',
+    discover: 'Discover',
+    discoveryMode: 'Display mode',
+    discoveryImages: 'Images',
+    discoveryCovers: 'Episode covers',
+    discoveryRefresh: 'Shuffle',
+    discoveryMore: 'Load more',
     unsavedChanges: 'Unsaved changes',
     saveBeforeLeaving: 'Save changes before leaving? Click outside this dialog or press Esc to keep editing.',
     discardChanges: 'Discard',
@@ -815,6 +839,14 @@ const dictionaries = {
     warningDuplicateEpisodeSource: 'Episode {episode} appears in multiple scan roots'
   },
   ja: {
+    discoveryDraw: 'ガチャ',
+    discoveryDrawCount: '枚数（1–100）',
+    discover: 'ランダム閲覧',
+    discoveryMode: '表示方法',
+    discoveryImages: '画像',
+    discoveryCovers: 'エピソード表紙',
+    discoveryRefresh: 'シャッフル',
+    discoveryMore: 'もっと見る',
     unsavedChanges: '未保存の変更',
     saveBeforeLeaving: '移動する前に変更を保存しますか？ダイアログの外側をクリックするか Esc キーを押すと編集を続けられます。',
     discardChanges: '保存しない',

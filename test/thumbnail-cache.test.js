@@ -25,6 +25,21 @@ test('thumbnail cache generates once and reuses the derived image', async () => 
   assert.equal(await fs.readFile(first, 'utf8'), 'small webp bytes');
 });
 
+test('medium previews have separate cache entries and retain portrait detail', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'comic-preview-'));
+  const sourcePath = path.join(root, 'source.png');
+  await sharp({ create: { width: 2000, height: 3000, channels: 3, background: '#336699' } }).png().toFile(sourcePath);
+  const options = { sourcePath, cacheRoot: root, width: 960, height: 1440, quality: 85 };
+  const medium = await getThumbnailPath(options);
+  assert.equal(await getThumbnailPath(options), medium);
+  const small = await getThumbnailPath({ sourcePath, cacheRoot: root });
+  assert.notEqual(medium, small);
+  assert.notEqual(await getThumbnailPath({ ...options, quality: 80 }), medium);
+  const metadata = await sharp(medium).metadata();
+  assert.equal(metadata.width, 960);
+  assert.equal(metadata.height, 1440);
+});
+
 test('sharp creates an auto-oriented WebP thumbnail inside the requested bounds', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'comic-thumbnail-sharp-'));
   const sourcePath = path.join(root, 'source.jpg');

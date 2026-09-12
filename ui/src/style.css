@@ -82,7 +82,8 @@ button, input { font: inherit; }
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
-.top-actions .mdi-icon { margin-right: 7px; }
+:where(.var-button__content:has(> .mdi-icon)) { column-gap: 8px; }
+:where(.var-button__content > .mdi-icon) { flex-shrink: 0; }
 .top-actions > .var-menu { display: inline-flex; }
 .library-location-popover { overflow: hidden !important; border: 1px solid var(--outline) !important; border-radius: 20px !important; background: var(--surface-highest) !important; }
 .library-location-panel { width: min(430px, calc(100vw - 24px)); display: grid; gap: 12px; padding: 16px; }
@@ -183,6 +184,8 @@ button, input { font: inherit; }
 .collection-system-items { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--outline-soft); }
 .collection-item { min-height: 48px !important; height: auto !important; margin: 4px 0; padding: 8px 12px !important; border-radius: 16px !important; color: var(--text) !important; transition: color 140ms ease, background-color 140ms ease, box-shadow 140ms ease; }
 .collection-item .var-button__content { width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 10px; overflow: hidden; }
+.collection-system-items .collection-item .var-button__content { grid-template-columns: 24px minmax(0, 1fr) auto; text-align: left; }
+.collection-system-items .collection-copy { grid-column: 2; }
 .collection-item.active { color: var(--on-secondary-container) !important; background: var(--secondary-container) !important; }
 .collection-item.drop-target {
   color: var(--on-primary-container) !important;
@@ -1296,8 +1299,8 @@ button, input { font: inherit; }
   .reader.is-fullscreen { --titlebar-height: calc(92px + env(safe-area-inset-top)); }
 }
 
-.page-skeleton { padding: 24px; display: grid; gap: 28px; align-content: start; overflow: auto; }
-.page-skeleton .var-skeleton { min-height: 100px; }
+.page-skeleton { padding: 16px; display: grid; gap: 20px; align-content: start; overflow: auto; }
+.page-skeleton .var-skeleton { min-height: 48px; }
 
 @media (pointer: coarse), (max-width: 760px) {
   .reader, .reader.is-fullscreen { --titlebar-height: calc(100px + env(safe-area-inset-top)); }

@@ -1,5 +1,6 @@
 <script setup>
 import PageSkeleton from './components/PageSkeleton.vue';
+import DiscoveryFeed from './components/DiscoveryFeed.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRaw } from 'vue';
 import { Dialog, Snackbar } from '@varlet/ui';
 import {
@@ -13,12 +14,14 @@ import {
   mdiFolderOpenOutline,
   mdiFullscreen,
   mdiImageOutline,
+  mdiInboxOutline,
   mdiMagnify,
   mdiMagnifyMinusOutline,
   mdiMagnifyPlusOutline,
   mdiPencilOutline,
   mdiPlus,
   mdiSelectionEllipse,
+  mdiShuffleVariant,
   mdiTagArrowDownOutline,
   mdiTagOutline,
   mdiTagPlusOutline,
@@ -103,6 +106,17 @@ const pageSliderRef = ref(null);
 const episodeSliderRef = ref(null);
 const readerVariantsRef = ref(null);
 const mobileCollectionOpen = ref(false);
+const discoveryOpen = ref(Boolean(window.history.state?.discovery));
+
+function openDiscovery() {
+  window.history.pushState({ ...(window.history.state ?? {}), discovery: true }, '');
+  discoveryOpen.value = true;
+}
+
+function closeDiscovery() {
+  if (window.history.state?.discovery) window.history.back();
+  else discoveryOpen.value = false;
+}
 const portraitReaderMode = window.matchMedia('(max-width: 760px) and (orientation: portrait)');
 
 let reader;
@@ -359,6 +373,7 @@ function closeMobileCollection() {
 }
 
 function syncMobileNavigation(event) {
+  discoveryOpen.value = Boolean(event.state?.discovery);
   mobileCollectionOpen.value = Boolean(event.state?.mobileCollectionOpen);
   if (reader?.isOpen() && !event.state?.readerEpisode) {
     const episodeId = reader.episodeId;
@@ -391,13 +406,13 @@ function readerCollection(currentEpisodeId) {
     : null;
 }
 
-function openReader(episodeId) {
+function openReader(episodeId, preferredIndex = 0) {
   readerReturnPath = null;
   state.selectedEpisodeId = episodeId;
   if (portraitReaderMode.matches && !window.history.state?.readerEpisode) {
     window.history.pushState({ ...(window.history.state ?? {}), mobileCollectionOpen: true, readerEpisode: episodeId }, '');
   }
-  reader?.open(episodeId);
+  reader?.open(episodeId, preferredIndex);
 }
 
 function goTo(path) {
@@ -877,7 +892,7 @@ onBeforeUnmount(() => {
     <var-switch v-model="copyAndroidLibrary">{{ t('copyLibraryToApp') }}</var-switch>
     <p>{{ t('copyLibraryToAppNote') }}</p>
   </var-dialog>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'discovery-active': discoveryOpen }">
     <AppTopBar
       :busy-action="state.busyAction"
       :issue-count="state.library.warnings?.length ?? 0"
@@ -895,8 +910,8 @@ onBeforeUnmount(() => {
       @change-locale="changeLocale"
     />
 
-    <PageSkeleton v-if="pageLoading" />
-    <main v-show="!pageLoading" class="workspace-grid" :class="{ 'mobile-collection-open': mobileCollectionOpen }">
+    <DiscoveryFeed v-if="discoveryOpen" :loading="pageLoading" :library="state.library" :tags="state.tags" :category-style="tagCategoryStyle" :episode-label="episodeLabel" @close="closeDiscovery" @read="openReader($event.episodeId, $event.index)" />
+    <main v-show="!discoveryOpen" class="workspace-grid" :class="{ 'mobile-collection-open': mobileCollectionOpen }">
       <var-card class="collection-pane" elevation="0">
         <header class="pane-heading">
           <h2>{{ t('collections') }}</h2>
@@ -910,6 +925,7 @@ onBeforeUnmount(() => {
             <var-button type="primary" @click="chooseAndroidReadingDirectory">{{ t('chooseReadingDirectory') }}</var-button>
           </section>
           <div v-if="!isAndroidApp || androidLibraryInitialized" class="collection-system-items">
+            <var-button block text class="collection-item" @click="openDiscovery"><MdiIcon :path="mdiShuffleVariant" /><span class="collection-copy"><strong>{{ t('discover') }}</strong></span></var-button>
             <var-button
               block
               text
@@ -917,6 +933,7 @@ onBeforeUnmount(() => {
               :class="{ active: !state.selectedThemeTitle && !state.unassignedOnly }"
               @click="selectCollectionFromClick()"
             >
+              <MdiIcon :path="mdiBookMultipleOutline" />
               <span class="collection-copy"><strong>{{ t('all') }}</strong></span>
               <var-badge class="collection-count" :value="episodeIds().length" :max-value="999" :type="!state.selectedThemeTitle && !state.unassignedOnly ? 'primary' : 'info'" />
             </var-button>
@@ -927,10 +944,12 @@ onBeforeUnmount(() => {
               :class="{ active: !state.selectedThemeTitle && state.unassignedOnly }"
               @click="selectCollectionFromClick(null, true)"
             >
+              <MdiIcon :path="mdiInboxOutline" />
               <span class="collection-copy"><strong>{{ t('unassigned') }}</strong></span>
               <var-badge class="collection-count" :value="unassignedEpisodeIds.length" :max-value="999" :type="!state.selectedThemeTitle && state.unassignedOnly ? 'primary' : 'info'" />
             </var-button>
           </div>
+          <PageSkeleton v-if="pageLoading" />
           <var-button
             v-for="theme in state.themes"
             :key="theme.title"
@@ -1018,6 +1037,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div ref="listRef" class="episode-scroll" @scroll="onListScroll" @dragover.prevent="onListDragOver" @drop.prevent="dropAtIndex">
+          <PageSkeleton v-if="pageLoading" />
           <div v-if="filteredEpisodeIds.length" class="virtual-canvas" :style="{ height: `${filteredEpisodeIds.length * ROW_HEIGHT + (canReorder ? 22 : 0)}px` }">
             <div v-if="canReorder && dropIndex != null" class="drop-indicator" :style="{ top: `${dropIndex * ROW_HEIGHT}px` }"><span>{{ t('dropHere') }}</span></div>
             <article
@@ -1088,7 +1108,7 @@ onBeforeUnmount(() => {
               </div>
             </article>
           </div>
-          <div v-else class="empty-state">{{ t('noResults') }}</div>
+          <div v-else-if="!pageLoading" class="empty-state">{{ t('noResults') }}</div>
         </div>
       </var-card>
     </main>

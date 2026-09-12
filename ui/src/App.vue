@@ -14,6 +14,7 @@ import {
   mdiFolderOpenOutline,
   mdiFullscreen,
   mdiImageOutline,
+  mdiInboxOutline,
   mdiMagnify,
   mdiMagnifyMinusOutline,
   mdiMagnifyPlusOutline,
@@ -917,7 +918,6 @@ onBeforeUnmount(() => {
           <var-button v-if="isAndroidApp" class="android-library-change" round text :aria-label="t('chooseReadingDirectory')" :title="t('chooseReadingDirectory')" @click="chooseAndroidReadingDirectory"><MdiIcon :path="mdiFolderOpenOutline" /></var-button>
         </header>
         <div ref="collectionListRef" class="collection-list">
-          <PageSkeleton v-if="pageLoading" />
           <section v-if="isAndroidApp && !androidLibraryInitialized" class="android-library-prompt">
             <MdiIcon :path="mdiFolderOpenOutline" size="34" />
             <strong>{{ t('androidLibraryPrompt') }}</strong>
@@ -933,6 +933,7 @@ onBeforeUnmount(() => {
               :class="{ active: !state.selectedThemeTitle && !state.unassignedOnly }"
               @click="selectCollectionFromClick()"
             >
+              <MdiIcon :path="mdiBookMultipleOutline" />
               <span class="collection-copy"><strong>{{ t('all') }}</strong></span>
               <var-badge class="collection-count" :value="episodeIds().length" :max-value="999" :type="!state.selectedThemeTitle && !state.unassignedOnly ? 'primary' : 'info'" />
             </var-button>
@@ -943,10 +944,12 @@ onBeforeUnmount(() => {
               :class="{ active: !state.selectedThemeTitle && state.unassignedOnly }"
               @click="selectCollectionFromClick(null, true)"
             >
+              <MdiIcon :path="mdiInboxOutline" />
               <span class="collection-copy"><strong>{{ t('unassigned') }}</strong></span>
               <var-badge class="collection-count" :value="unassignedEpisodeIds.length" :max-value="999" :type="!state.selectedThemeTitle && state.unassignedOnly ? 'primary' : 'info'" />
             </var-button>
           </div>
+          <PageSkeleton v-if="pageLoading" />
           <var-button
             v-for="theme in state.themes"
             :key="theme.title"

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { discoveryCandidates, shuffleDiscovery } from '../../../public/discovery-model.js';
+import { discoveryCandidates, shuffleDiscovery, drawDiscovery, normalizeDrawCount } from '../../../public/discovery-model.js';
+import DiscoveryImage from './DiscoveryImage.vue';
 import { countTagEpisodes } from '../../../public/collection-model.js';
 import { getImageUrl, getThumbnailUrl } from '../../../public/reader-model.js';
 import { t } from '../../../public/i18n.js';
@@ -16,6 +17,8 @@ const props = defineProps({
 });
 const emit = defineEmits(['close', 'read']);
 const mode = ref('images');
+const drawMode = ref(false);
+const drawCount = ref(3);
 const filters = ref({});
 const items = ref([]);
 const limit = ref(60);
@@ -34,8 +37,9 @@ const candidates = computed(() => discoveryCandidates(props.library, props.tags,
 let observer;
 
 function refresh() {
-  items.value = shuffleDiscovery(candidates.value);
-  limit.value = 60;
+  drawCount.value = normalizeDrawCount(drawCount.value);
+  items.value = drawMode.value ? drawDiscovery(candidates.value, drawCount.value) : shuffleDiscovery(candidates.value);
+  limit.value = drawMode.value ? items.value.length : 60;
   nextTick(() => scrollRoot.value?.scrollTo({ top: 0 }));
 }
 function open(item) {
@@ -45,8 +49,9 @@ function open(item) {
     previewOpen.value = true;
   }
 }
-function more() { limit.value += 60; }
+function more() { if (!drawMode.value) limit.value += 60; }
 watch(candidates, refresh, { immediate: true });
+watch(drawMode, refresh);
 onMounted(() => {
   observer = new IntersectionObserver(([entry]) => {
     if (entry.isIntersecting) more();
@@ -66,18 +71,24 @@ onBeforeUnmount(() => observer?.disconnect());
         <var-button :type="mode === 'covers' ? 'primary' : 'default'" :aria-pressed="mode === 'covers'" @click="mode = 'covers'">{{ t('discoveryCovers') }}</var-button>
       </var-button-group>
       <TagFilterControl v-model="filters" :categories="tags.categories" :category-style="categoryStyle" :counts="counts" />
+      <var-switch v-model="drawMode">{{ t('discoveryDraw') }}</var-switch>
+      <template v-if="drawMode">
+        <var-button size="small" text @click="drawCount = 3; refresh()">3</var-button>
+        <var-button size="small" text @click="drawCount = 5; refresh()">5</var-button>
+        <var-input v-model="drawCount" class="draw-count" type="number" min="1" max="100" size="small" variant="outlined" :is-show-form-details="false" :placeholder="t('discoveryDrawCount')" :aria-label="t('discoveryDrawCount')" @blur="refresh" @keydown.enter="refresh" />
+      </template>
       <var-button round text :aria-label="t('discoveryRefresh')" :title="t('discoveryRefresh')" @click="refresh"><MdiIcon :path="mdiRefresh" /></var-button>
     </header>
     <div ref="scrollRoot" class="discovery-scroll">
       <div v-for="(batch, batchIndex) in batches" :key="batchIndex" class="discovery-masonry">
         <button v-for="item in batch" :key="JSON.stringify([item.episodeId, item.index])" class="discovery-card" type="button" @click="open(item)">
-          <img :src="getThumbnailUrl(item.episodeId, item.index, item.file.assetKey)" :alt="item.file.name" loading="lazy" decoding="async">
-          <span>{{ episodeLabel(item.episodeId) }}</span>
+          <DiscoveryImage :src="getThumbnailUrl(item.episodeId, item.index, item.file.assetKey, 'preview')" :alt="item.file.name" />
+          <span class="discovery-caption">{{ episodeLabel(item.episodeId) }}</span>
         </button>
       </div>
       <p v-if="!items.length" class="empty-state">{{ t('noResults') }}</p>
       <div ref="sentinel" class="discovery-more">
-        <var-button v-if="limit < items.length" text @click="more">{{ t('discoveryMore') }}</var-button>
+        <var-button v-if="!drawMode && limit < items.length" text @click="more">{{ t('discoveryMore') }}</var-button>
       </div>
     </div>
     <var-dialog v-model:show="previewOpen" :title="preview?.file.name" :confirm-button-text="t('back')" width="min(960px, calc(100vw - 24px))">
@@ -96,8 +107,8 @@ onBeforeUnmount(() => observer?.disconnect());
 .discovery-masonry { columns: 5 220px; column-gap: 12px; }
 .discovery-card { display: block; width: 100%; padding: 0; margin: 0 0 12px; break-inside: avoid; border: 0; border-radius: 8px; overflow: hidden; background: var(--surface); color: inherit; cursor: pointer; text-align: left; font: inherit; }
 .discovery-card:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
-.discovery-card img { width: 100%; height: auto; min-height: 80px; display: block; }
-.discovery-card span { display: block; padding: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.discovery-caption { display: block; padding: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.draw-count { width: 100px; flex: none; }
 .discovery-more { text-align: center; padding: 16px; }
 .discovery-preview { display: block; max-width: 100%; max-height: 72dvh; margin: auto; object-fit: contain; }
 @media (max-width: 600px) {

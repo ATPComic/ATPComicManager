@@ -24,3 +24,18 @@ export function shuffleDiscovery(items, random = Math.random) {
   }
   return result;
 }
+
+export function normalizeDrawCount(value) {
+  const count = Number(value);
+  return Number.isFinite(count) ? Math.min(100, Math.max(1, Math.trunc(count))) : 3;
+}
+
+export function drawDiscovery(items, count, random = Math.random) {
+  const size = Math.min(items.length, normalizeDrawCount(count));
+  const result = items.slice(0, size);
+  for (let index = size; index < items.length; index += 1) {
+    const target = Math.floor(random() * (index + 1));
+    if (target < size) result[target] = items[index];
+  }
+  return shuffleDiscovery(result, random);
+}

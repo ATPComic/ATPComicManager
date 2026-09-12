@@ -2,6 +2,8 @@ import { detectLocale } from './locale.js';
 
 const dictionaries = {
   'zh-CN': {
+    discoveryDraw: '扭蛋',
+    discoveryDrawCount: '数量（1–100）',
     discover: '随机浏览',
     discoveryMode: '展示方式',
     discoveryImages: '图片',
@@ -279,6 +281,8 @@ const dictionaries = {
     warningDuplicateEpisodeSource: '单集 {episode} 出现在多个扫描来源中'
   },
   'zh-TW': {
+    discoveryDraw: '扭蛋',
+    discoveryDrawCount: '數量（1–100）',
     discover: '隨機瀏覽',
     discoveryMode: '顯示方式',
     discoveryImages: '圖片',
@@ -556,6 +560,8 @@ const dictionaries = {
     warningDuplicateEpisodeSource: '單集 {episode} 出現在多個掃描來源中'
   },
   en: {
+    discoveryDraw: 'Lucky draw',
+    discoveryDrawCount: 'Count (1–100)',
     discover: 'Discover',
     discoveryMode: 'Display mode',
     discoveryImages: 'Images',
@@ -833,6 +839,8 @@ const dictionaries = {
     warningDuplicateEpisodeSource: 'Episode {episode} appears in multiple scan roots'
   },
   ja: {
+    discoveryDraw: 'ガチャ',
+    discoveryDrawCount: '枚数（1–100）',
     discover: 'ランダム閲覧',
     discoveryMode: '表示方法',
     discoveryImages: '画像',

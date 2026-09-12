@@ -1,6 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { discoveryCandidates, shuffleDiscovery } from '../public/discovery-model.js';
+import { discoveryCandidates, shuffleDiscovery, drawDiscovery, normalizeDrawCount } from '../public/discovery-model.js';
+import { getThumbnailUrl } from '../public/reader-model.js';
+
+test('draw count is bounded and draws never duplicate candidates or mutate the pool', () => {
+  const pool = Array.from({ length: 200 }, (_, index) => index);
+  for (const count of [3, 5, 80, 100]) {
+    const draw = drawDiscovery(pool, count);
+    assert.equal(draw.length, count);
+    assert.equal(new Set(draw).size, count);
+    assert.ok(draw.every((item) => pool.includes(item)));
+  }
+  assert.equal(pool[0], 0);
+  assert.deepEqual(drawDiscovery([], 3), []);
+  assert.equal(drawDiscovery([1, 2], 5).length, 2);
+  assert.equal(normalizeDrawCount('invalid'), 3);
+  assert.equal(normalizeDrawCount(-5), 1);
+  assert.equal(normalizeDrawCount(500), 100);
+  assert.equal(normalizeDrawCount(4.9), 4);
+});
+
+test('preview URLs retain stable identity while small thumbnail URLs stay unchanged', () => {
+  assert.equal(getThumbnailUrl('episode', 2, 'stable', 'preview'), '/api/thumbnail?episodeId=episode&index=2&file=stable&size=preview');
+  assert.equal(getThumbnailUrl('episode', 2, 'stable'), '/api/thumbnail?episodeId=episode&index=2&file=stable');
+});
 
 const library = { episodes: {
   first: { files: [

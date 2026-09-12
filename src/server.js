@@ -264,6 +264,7 @@ export async function startServer(config) {
           return;
         }
         const thumbnailPath = await getThumbnailPath({
+          ...(url.searchParams.get('size') === 'preview' ? { width: 960, height: 1440, quality: 85 } : {}),
           sourcePath: file.absolutePath,
           cacheRoot: config.thumbnailCacheRoot ?? path.join(config.workspaceRoot, '.comic-manager-cache', 'thumbnails')
         });

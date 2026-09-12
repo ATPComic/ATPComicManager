@@ -1,5 +1,6 @@
 <script setup>
 import PageSkeleton from './components/PageSkeleton.vue';
+import DiscoveryFeed from './components/DiscoveryFeed.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRaw } from 'vue';
 import { Dialog, Snackbar } from '@varlet/ui';
 import {
@@ -19,6 +20,7 @@ import {
   mdiPencilOutline,
   mdiPlus,
   mdiSelectionEllipse,
+  mdiShuffleVariant,
   mdiTagArrowDownOutline,
   mdiTagOutline,
   mdiTagPlusOutline,
@@ -103,6 +105,17 @@ const pageSliderRef = ref(null);
 const episodeSliderRef = ref(null);
 const readerVariantsRef = ref(null);
 const mobileCollectionOpen = ref(false);
+const discoveryOpen = ref(Boolean(window.history.state?.discovery));
+
+function openDiscovery() {
+  window.history.pushState({ ...(window.history.state ?? {}), discovery: true }, '');
+  discoveryOpen.value = true;
+}
+
+function closeDiscovery() {
+  if (window.history.state?.discovery) window.history.back();
+  else discoveryOpen.value = false;
+}
 const portraitReaderMode = window.matchMedia('(max-width: 760px) and (orientation: portrait)');
 
 let reader;
@@ -359,6 +372,7 @@ function closeMobileCollection() {
 }
 
 function syncMobileNavigation(event) {
+  discoveryOpen.value = Boolean(event.state?.discovery);
   mobileCollectionOpen.value = Boolean(event.state?.mobileCollectionOpen);
   if (reader?.isOpen() && !event.state?.readerEpisode) {
     const episodeId = reader.episodeId;
@@ -391,13 +405,13 @@ function readerCollection(currentEpisodeId) {
     : null;
 }
 
-function openReader(episodeId) {
+function openReader(episodeId, preferredIndex = 0) {
   readerReturnPath = null;
   state.selectedEpisodeId = episodeId;
   if (portraitReaderMode.matches && !window.history.state?.readerEpisode) {
     window.history.pushState({ ...(window.history.state ?? {}), mobileCollectionOpen: true, readerEpisode: episodeId }, '');
   }
-  reader?.open(episodeId);
+  reader?.open(episodeId, preferredIndex);
 }
 
 function goTo(path) {
@@ -877,7 +891,7 @@ onBeforeUnmount(() => {
     <var-switch v-model="copyAndroidLibrary">{{ t('copyLibraryToApp') }}</var-switch>
     <p>{{ t('copyLibraryToAppNote') }}</p>
   </var-dialog>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'discovery-active': discoveryOpen }">
     <AppTopBar
       :busy-action="state.busyAction"
       :issue-count="state.library.warnings?.length ?? 0"
@@ -896,7 +910,8 @@ onBeforeUnmount(() => {
     />
 
     <PageSkeleton v-if="pageLoading" />
-    <main v-show="!pageLoading" class="workspace-grid" :class="{ 'mobile-collection-open': mobileCollectionOpen }">
+    <DiscoveryFeed v-if="discoveryOpen && !pageLoading" :library="state.library" :tags="state.tags" :category-style="tagCategoryStyle" :episode-label="episodeLabel" @close="closeDiscovery" @read="openReader($event.episodeId, $event.index)" />
+    <main v-show="!pageLoading && !discoveryOpen" class="workspace-grid" :class="{ 'mobile-collection-open': mobileCollectionOpen }">
       <var-card class="collection-pane" elevation="0">
         <header class="pane-heading">
           <h2>{{ t('collections') }}</h2>
@@ -910,6 +925,7 @@ onBeforeUnmount(() => {
             <var-button type="primary" @click="chooseAndroidReadingDirectory">{{ t('chooseReadingDirectory') }}</var-button>
           </section>
           <div v-if="!isAndroidApp || androidLibraryInitialized" class="collection-system-items">
+            <var-button block text class="collection-item" @click="openDiscovery"><MdiIcon :path="mdiShuffleVariant" /><span class="collection-copy"><strong>{{ t('discover') }}</strong></span></var-button>
             <var-button
               block
               text

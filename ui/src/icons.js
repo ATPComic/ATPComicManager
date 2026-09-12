@@ -1,4 +1,5 @@
 export {
+  mdiShuffleVariant,
   mdiArrowDown,
   mdiArrowLeft,
   mdiArrowRight,

@@ -1296,8 +1296,8 @@ button, input { font: inherit; }
   .reader.is-fullscreen { --titlebar-height: calc(92px + env(safe-area-inset-top)); }
 }
 
-.page-skeleton { padding: 24px; display: grid; gap: 28px; align-content: start; overflow: auto; }
-.page-skeleton .var-skeleton { min-height: 100px; }
+.page-skeleton { padding: 16px; display: grid; gap: 20px; align-content: start; overflow: auto; }
+.page-skeleton .var-skeleton { min-height: 48px; }
 
 @media (pointer: coarse), (max-width: 760px) {
   .reader, .reader.is-fullscreen { --titlebar-height: calc(100px + env(safe-area-inset-top)); }

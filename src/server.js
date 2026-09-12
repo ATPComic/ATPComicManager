@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { createReadStream } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import sharp from 'sharp';
 import { fileURLToPath } from 'node:url';
 import { scanWorkspace } from './scanner/scanner.js';
 import { mergeSharedLibrary, readLibrary, writeLibrary } from './model/library.js';
@@ -251,7 +252,7 @@ export async function startServer(config) {
         return;
       }
 
-      if (url.pathname === '/api/thumbnail' && request.method === 'GET') {
+      if (['/api/thumbnail', '/api/image-info'].includes(url.pathname) && request.method === 'GET') {
         const episodeId = url.searchParams.get('episodeId');
         const library = await loadLibrary();
         const file = resolveImageReference(library.episodes?.[episodeId], url.searchParams);
@@ -260,7 +261,20 @@ export async function startServer(config) {
           return;
         }
         if (file.missing || !file.absolutePath) {
+          if (url.pathname === '/api/image-info') {
+            sendJson(response, 200, { width: 2, height: 3 });
+            return;
+          }
           sendMissingImage(response);
+          return;
+        }
+        if (url.pathname === '/api/image-info') {
+          const metadata = await sharp(file.absolutePath).metadata();
+          const rotated = [5, 6, 7, 8].includes(metadata.orientation);
+          sendJson(response, 200, {
+            width: rotated ? metadata.height : metadata.width,
+            height: rotated ? metadata.width : metadata.height
+          });
           return;
         }
         const thumbnailPath = await getThumbnailPath({

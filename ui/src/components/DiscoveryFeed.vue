@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { discoveryCandidates, shuffleDiscovery, drawDiscovery, normalizeDrawCount } from '../../../public/discovery-model.js';
 import DiscoveryImage from './DiscoveryImage.vue';
+import { prepareDiscoveryLayout } from '../discovery-layout.js';
 import { countTagEpisodes } from '../../../public/collection-model.js';
 import { getImageUrl, getThumbnailUrl } from '../../../public/reader-model.js';
 import { t } from '../../../public/i18n.js';
@@ -10,6 +11,7 @@ import MdiIcon from './MdiIcon.vue';
 import TagFilterControl from './TagFilterControl.vue';
 
 const props = defineProps({
+  loading: { type: Boolean, default: false },
   library: { type: Object, required: true },
   tags: { type: Object, required: true },
   categoryStyle: { type: Function, required: true },
@@ -21,12 +23,13 @@ const drawMode = ref(false);
 const drawCount = ref(3);
 const filters = ref({});
 const items = ref([]);
-const limit = ref(60);
+const prepared = ref([]);
+const preparing = ref(false);
 const scrollRoot = ref(null);
 const sentinel = ref(null);
 const preview = ref(null);
 const previewOpen = ref(false);
-const visible = computed(() => items.value.slice(0, limit.value));
+const visible = computed(() => prepared.value);
 const batches = computed(() => {
   const result = [];
   for (let index = 0; index < visible.value.length; index += 60) result.push(visible.value.slice(index, index + 60));
@@ -35,11 +38,33 @@ const batches = computed(() => {
 const counts = computed(() => countTagEpisodes(Object.keys(props.library.episodes ?? {}), props.tags.episodeTags, props.tags.categories));
 const candidates = computed(() => discoveryCandidates(props.library, props.tags, filters.value, mode.value));
 let observer;
+let preparation;
+const dimensionCache = new Map();
+
+async function prepareMore() {
+  if (preparing.value || prepared.value.length >= items.value.length) return;
+  const controller = new AbortController();
+  preparation = controller;
+  preparing.value = true;
+  const start = prepared.value.length;
+  const end = drawMode.value ? items.value.length : start + 60;
+  try {
+    const batch = await prepareDiscoveryLayout(items.value.slice(start, end), { signal: controller.signal, cache: dimensionCache });
+    if (!controller.signal.aborted) prepared.value = [...prepared.value, ...batch];
+  } catch (error) {
+    if (!controller.signal.aborted) throw error;
+  } finally {
+    if (preparation === controller) preparing.value = false;
+  }
+}
 
 function refresh() {
+  preparation?.abort();
+  preparing.value = false;
+  prepared.value = [];
   drawCount.value = normalizeDrawCount(drawCount.value);
   items.value = drawMode.value ? drawDiscovery(candidates.value, drawCount.value) : shuffleDiscovery(candidates.value);
-  limit.value = drawMode.value ? items.value.length : 60;
+  void prepareMore();
   nextTick(() => scrollRoot.value?.scrollTo({ top: 0 }));
 }
 function open(item) {
@@ -49,7 +74,7 @@ function open(item) {
     previewOpen.value = true;
   }
 }
-function more() { if (!drawMode.value) limit.value += 60; }
+function more() { if (!drawMode.value) void prepareMore(); }
 watch(candidates, refresh, { immediate: true });
 watch(drawMode, refresh);
 onMounted(() => {
@@ -58,7 +83,7 @@ onMounted(() => {
   }, { root: scrollRoot.value, rootMargin: '500px' });
   observer.observe(sentinel.value);
 });
-onBeforeUnmount(() => observer?.disconnect());
+onBeforeUnmount(() => { observer?.disconnect(); preparation?.abort(); });
 </script>
 
 <template>
@@ -67,28 +92,27 @@ onBeforeUnmount(() => observer?.disconnect());
       <var-button round text :aria-label="t('back')" @click="emit('close')"><MdiIcon :path="mdiChevronLeft" /></var-button>
       <h2>{{ t('discover') }}</h2>
       <var-button-group size="small" mode="outline" :elevation="false" :aria-label="t('discoveryMode')">
-        <var-button :type="mode === 'images' ? 'primary' : 'default'" :aria-pressed="mode === 'images'" @click="mode = 'images'">{{ t('discoveryImages') }}</var-button>
-        <var-button :type="mode === 'covers' ? 'primary' : 'default'" :aria-pressed="mode === 'covers'" @click="mode = 'covers'">{{ t('discoveryCovers') }}</var-button>
+        <var-button outline :type="mode === 'images' ? 'primary' : 'default'" :aria-pressed="mode === 'images'" @click="mode = 'images'">{{ t('discoveryImages') }}</var-button>
+        <var-button outline :type="mode === 'covers' ? 'primary' : 'default'" :aria-pressed="mode === 'covers'" @click="mode = 'covers'">{{ t('discoveryCovers') }}</var-button>
       </var-button-group>
       <TagFilterControl v-model="filters" :categories="tags.categories" :category-style="categoryStyle" :counts="counts" />
-      <var-switch v-model="drawMode">{{ t('discoveryDraw') }}</var-switch>
+      <div class="draw-control"><span>{{ t('discoveryDraw') }}</span><var-switch v-model="drawMode" :aria-label="t('discoveryDraw')" /></div>
       <template v-if="drawMode">
-        <var-button size="small" text @click="drawCount = 3; refresh()">3</var-button>
-        <var-button size="small" text @click="drawCount = 5; refresh()">5</var-button>
-        <var-input v-model="drawCount" class="draw-count" type="number" min="1" max="100" size="small" variant="outlined" :is-show-form-details="false" :placeholder="t('discoveryDrawCount')" :aria-label="t('discoveryDrawCount')" @blur="refresh" @keydown.enter="refresh" />
+        <var-input v-model="drawCount" class="draw-count" type="number" min="1" max="100" size="small" variant="outlined" :hint="false" :is-show-form-details="false" :placeholder="t('discoveryDrawCount')" :aria-label="t('discoveryDrawCount')" @blur="refresh" @keydown.enter="refresh" />
       </template>
       <var-button round text :aria-label="t('discoveryRefresh')" :title="t('discoveryRefresh')" @click="refresh"><MdiIcon :path="mdiRefresh" /></var-button>
     </header>
     <div ref="scrollRoot" class="discovery-scroll">
       <div v-for="(batch, batchIndex) in batches" :key="batchIndex" class="discovery-masonry">
         <button v-for="item in batch" :key="JSON.stringify([item.episodeId, item.index])" class="discovery-card" type="button" @click="open(item)">
-          <DiscoveryImage :src="getThumbnailUrl(item.episodeId, item.index, item.file.assetKey, 'preview')" :alt="item.file.name" />
+          <DiscoveryImage :src="getThumbnailUrl(item.episodeId, item.index, item.file.assetKey, 'preview')" :alt="item.file.name" :aspect-ratio="item.aspectRatio" />
           <span class="discovery-caption">{{ episodeLabel(item.episodeId) }}</span>
         </button>
       </div>
-      <p v-if="!items.length" class="empty-state">{{ t('noResults') }}</p>
+      <p v-if="!loading && !items.length" class="empty-state">{{ t('noResults') }}</p>
       <div ref="sentinel" class="discovery-more">
-        <var-button v-if="!drawMode && limit < items.length" text @click="more">{{ t('discoveryMore') }}</var-button>
+        <var-skeleton v-if="preparing || loading" :rows="1" />
+        <var-button v-if="!drawMode && prepared.length < items.length" :loading="preparing" text @click="more">{{ t('discoveryMore') }}</var-button>
       </div>
     </div>
     <var-dialog v-model:show="previewOpen" :title="preview?.file.name" :confirm-button-text="t('back')" width="min(960px, calc(100vw - 24px))">
@@ -109,6 +133,8 @@ onBeforeUnmount(() => observer?.disconnect());
 .discovery-card:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .discovery-caption { display: block; padding: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .draw-count { width: 100px; flex: none; }
+.draw-control { display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; border: 1px solid var(--outline); border-radius: 20px; font-size: 14px; }
+.discovery-toolbar :deep(.var-button-group .var-button), .discovery-toolbar :deep(.query-filter-trigger) { height: 40px; font-size: 14px; }
 .discovery-more { text-align: center; padding: 16px; }
 .discovery-preview { display: block; max-width: 100%; max-height: 72dvh; margin: auto; object-fit: contain; }
 @media (max-width: 600px) {

@@ -230,18 +230,18 @@ onMounted(async () => {
         <h1>{{ t('tags') }}</h1>
       </div>
       <div class="top-actions">
-        <var-button size="small" type="primary" :loading="state.busy" @click="saveTags"><MdiIcon :path="mdiContentSaveOutline" />{{ t('save') }}</var-button>
+        <var-button size="small" type="primary" :disabled="pageLoading" :loading="state.busy" @click="saveTags"><MdiIcon :path="mdiContentSaveOutline" />{{ t('save') }}</var-button>
         <LanguageMenu v-model="selectedLocale" :options="localeOptions" :label="t('language')" @change="changeLocale" />
       </div>
     </header>
 
-    <PageSkeleton v-if="pageLoading" />
-    <main v-show="!pageLoading" class="tag-page-workspace">
+    <main class="tag-page-workspace">
       <header class="tag-page-intro">
         <p>{{ t('tagSystemNote') }}</p>
-        <var-button type="primary" tonal @click="addCategory"><MdiIcon :path="mdiPlus" />{{ t('addCategory') }}</var-button>
+        <var-button type="primary" tonal :disabled="pageLoading" @click="addCategory"><MdiIcon :path="mdiPlus" />{{ t('addCategory') }}</var-button>
       </header>
       <div class="tag-category-grid">
+        <PageSkeleton v-if="pageLoading" />
         <var-card
           v-for="(category, categoryIndex) in draftCategories"
           :key="category.id || categoryIndex"

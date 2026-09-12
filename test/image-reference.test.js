@@ -40,6 +40,10 @@ test('image and thumbnail URLs follow selected monthly files, not stale position
     const stableUrl = getImageUrl('20260101', 0, current.files[1].assetKey);
     assert.deepEqual(Buffer.from(await (await request(stableUrl)).arrayBuffer()), monthlyBytes);
     const thumbnailUrl = getThumbnailUrl('20260101', 0, current.files[1].assetKey);
+    const metadata = await request(thumbnailUrl.replace('/api/thumbnail?', '/api/image-info?'));
+    assert.equal(metadata.status, 200);
+    assert.deepEqual(await metadata.json(), { width: 8, height: 8 });
+    assert.equal((await request('/api/image-info?episodeId=20260101&index=0&file=invalid')).status, 404);
     const thumbnail = await request(thumbnailUrl);
     assert.equal(thumbnail.status, 200);
     const stats = await sharp(Buffer.from(await thumbnail.arrayBuffer())).stats();

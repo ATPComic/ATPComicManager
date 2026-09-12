@@ -909,15 +909,15 @@ onBeforeUnmount(() => {
       @change-locale="changeLocale"
     />
 
-    <PageSkeleton v-if="pageLoading" />
-    <DiscoveryFeed v-if="discoveryOpen && !pageLoading" :library="state.library" :tags="state.tags" :category-style="tagCategoryStyle" :episode-label="episodeLabel" @close="closeDiscovery" @read="openReader($event.episodeId, $event.index)" />
-    <main v-show="!pageLoading && !discoveryOpen" class="workspace-grid" :class="{ 'mobile-collection-open': mobileCollectionOpen }">
+    <DiscoveryFeed v-if="discoveryOpen" :loading="pageLoading" :library="state.library" :tags="state.tags" :category-style="tagCategoryStyle" :episode-label="episodeLabel" @close="closeDiscovery" @read="openReader($event.episodeId, $event.index)" />
+    <main v-show="!discoveryOpen" class="workspace-grid" :class="{ 'mobile-collection-open': mobileCollectionOpen }">
       <var-card class="collection-pane" elevation="0">
         <header class="pane-heading">
           <h2>{{ t('collections') }}</h2>
           <var-button v-if="isAndroidApp" class="android-library-change" round text :aria-label="t('chooseReadingDirectory')" :title="t('chooseReadingDirectory')" @click="chooseAndroidReadingDirectory"><MdiIcon :path="mdiFolderOpenOutline" /></var-button>
         </header>
         <div ref="collectionListRef" class="collection-list">
+          <PageSkeleton v-if="pageLoading" />
           <section v-if="isAndroidApp && !androidLibraryInitialized" class="android-library-prompt">
             <MdiIcon :path="mdiFolderOpenOutline" size="34" />
             <strong>{{ t('androidLibraryPrompt') }}</strong>
@@ -1034,6 +1034,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div ref="listRef" class="episode-scroll" @scroll="onListScroll" @dragover.prevent="onListDragOver" @drop.prevent="dropAtIndex">
+          <PageSkeleton v-if="pageLoading" />
           <div v-if="filteredEpisodeIds.length" class="virtual-canvas" :style="{ height: `${filteredEpisodeIds.length * ROW_HEIGHT + (canReorder ? 22 : 0)}px` }">
             <div v-if="canReorder && dropIndex != null" class="drop-indicator" :style="{ top: `${dropIndex * ROW_HEIGHT}px` }"><span>{{ t('dropHere') }}</span></div>
             <article
@@ -1104,7 +1105,7 @@ onBeforeUnmount(() => {
               </div>
             </article>
           </div>
-          <div v-else class="empty-state">{{ t('noResults') }}</div>
+          <div v-else-if="!pageLoading" class="empty-state">{{ t('noResults') }}</div>
         </div>
       </var-card>
     </main>

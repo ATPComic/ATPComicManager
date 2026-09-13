@@ -1,6 +1,9 @@
 <script setup>
 import PageSkeleton from './components/PageSkeleton.vue';
+import { useTouchUi } from './use-touch-ui.js';
+import { scrollHeaderState } from '../../public/scroll-header.js';
 import DiscoveryFeed from './components/DiscoveryFeed.vue';
+import PagesLibraryControl from './components/PagesLibraryControl.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRaw } from 'vue';
 import { Dialog, Snackbar } from '@varlet/ui';
 import {
@@ -40,7 +43,8 @@ import TagDisplayChip from './components/TagDisplayChip.vue';
 import TagFilterControl from './components/TagFilterControl.vue';
 import DateFilterControl from './components/DateFilterControl.vue';
 import EpisodeDateControl from './components/EpisodeDateControl.vue';
-import { chooseAndroidLibrary, isAndroidApp, nativeAssetUrl, requestJson } from './api.js';
+import { chooseAndroidLibrary, isAndroidApp, isPagesApp, nativeAssetUrl, requestJson } from './api.js';
+import SettingsMenu from './components/SettingsMenu.vue';
 import { navigateToPage, returnPathFromHref, variantEpisodePath } from './navigation.js';
 import { tagCategoryStyle as getTagCategoryStyle } from './tag-colors.js';
 import { EPISODE_DRAG_TYPE, draggedEpisodeId, compareEpisodesByDate, countTagEpisodes, matchesDateFilter, matchesTagFilter, moveItemToSlot } from '../../public/collection-model.js';
@@ -118,6 +122,17 @@ function closeDiscovery() {
   else discoveryOpen.value = false;
 }
 const portraitReaderMode = window.matchMedia('(max-width: 760px) and (orientation: portrait)');
+const touchUi = useTouchUi();
+const touchGesture = ref(false);
+const headerHidden = ref(false);
+const scrollPositions = new WeakMap();
+function onPageScroll(event) {
+  const target = event.target;
+  if (!touchUi.value || !target?.matches?.('.episode-scroll, .collection-list, .discovery-scroll')) return;
+  const next = scrollHeaderState(scrollPositions.get(target) ?? { top: 0, hidden: false, travel: 0 }, Math.max(0, target.scrollTop), Math.max(0, target.scrollHeight - target.clientHeight));
+  scrollPositions.set(target, next);
+  headerHidden.value = next.hidden;
+}
 
 let reader;
 let resizeObserver;
@@ -650,6 +665,7 @@ async function deleteTheme() {
 }
 
 function onDragStart(episodeId, event) {
+  if (touchUi.value || touchGesture.value) { event.preventDefault(); onDragEnd(); return; }
   state.draggedEpisodeId = episodeId;
   dropIndex.value = null;
   event.dataTransfer?.clearData();
@@ -892,7 +908,7 @@ onBeforeUnmount(() => {
     <var-switch v-model="copyAndroidLibrary">{{ t('copyLibraryToApp') }}</var-switch>
     <p>{{ t('copyLibraryToAppNote') }}</p>
   </var-dialog>
-  <div class="app-shell" :class="{ 'discovery-active': discoveryOpen }">
+  <div class="app-shell" :class="{ 'discovery-active': discoveryOpen, 'touch-header-hidden': touchUi && headerHidden }" @scroll.capture.passive="onPageScroll">
     <AppTopBar
       :busy-action="state.busyAction"
       :issue-count="state.library.warnings?.length ?? 0"
@@ -908,6 +924,7 @@ onBeforeUnmount(() => {
       @tags="goTo('/tags.html')"
       @variants="goTo('/variants.html')"
       @change-locale="changeLocale"
+      @pages-imported="loadState()"
     />
 
     <DiscoveryFeed v-if="discoveryOpen" :loading="pageLoading" :library="state.library" :tags="state.tags" :category-style="tagCategoryStyle" :episode-label="episodeLabel" @close="closeDiscovery" @read="openReader($event.episodeId, $event.index)" />
@@ -915,6 +932,8 @@ onBeforeUnmount(() => {
       <var-card class="collection-pane" elevation="0">
         <header class="pane-heading">
           <h2>{{ t('collections') }}</h2>
+          <PagesLibraryControl v-if="isPagesApp" @imported="loadState()" />
+          <span class="mobile-settings"><SettingsMenu v-model="selectedLocale" :options="localeOptions" @change="changeLocale" /></span>
           <var-button v-if="isAndroidApp" class="android-library-change" round text :aria-label="t('chooseReadingDirectory')" :title="t('chooseReadingDirectory')" @click="chooseAndroidReadingDirectory"><MdiIcon :path="mdiFolderOpenOutline" /></var-button>
         </header>
         <div ref="collectionListRef" class="collection-list">
@@ -1047,7 +1066,10 @@ onBeforeUnmount(() => {
               class="episode-row"
               :class="{ ordered: !!activeTheme, selected: state.selectedEpisodeId === row.episodeId, dragging: state.draggedEpisodeId === row.episodeId }"
               :style="{ transform: `translateY(${row.index * ROW_HEIGHT}px)` }"
-              draggable="true"
+              :draggable="!touchUi && !touchGesture"
+              @pointerdown="touchGesture = $event.pointerType !== 'mouse'"
+              @pointercancel="onDragEnd"
+              @contextmenu="touchUi || touchGesture ? $event.preventDefault() : undefined"
               @click="selectEpisodeFromClick(row.episodeId)"
               @dblclick="openReader(row.episodeId)"
               @dragstart="onDragStart(row.episodeId, $event)"

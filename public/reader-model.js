@@ -184,7 +184,7 @@ export function getImageUrl(episodeId, index, identity = null) {
 }
 
 export function getThumbnailUrl(episodeId, index, identity = null, size = 'small') {
-  const resolved = assetUrlResolver?.('thumbnail', episodeId, Number(index), identity);
+  const resolved = assetUrlResolver?.('thumbnail', episodeId, Number(index), identity, size);
   if (resolved) return resolved;
   const key = identity == null ? '' : `&file=${encodeURIComponent(String(identity))}`;
   return `/api/thumbnail?episodeId=${encodeURIComponent(episodeId)}&index=${Number(index)}${key}${size === 'preview' ? '&size=preview' : ''}`;

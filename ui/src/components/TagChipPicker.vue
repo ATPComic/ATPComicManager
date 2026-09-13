@@ -1,6 +1,9 @@
 <script setup>
 import { computed, onBeforeUnmount, ref } from 'vue';
 import TagCascadeMenu from './TagCascadeMenu.vue';
+import TouchTagTree from './TouchTagTree.vue';
+import { useTouchUi } from '../use-touch-ui.js';
+const touch = useTouchUi();
 
 const HOVER_OPEN_DELAY = 200;
 const HOVER_CLOSE_DELAY = 220;
@@ -59,7 +62,9 @@ onBeforeUnmount(clearTimers);
 
 <template>
   <div class="tag-assignment-picker tag-chip-picker">
+    <TouchTagTree v-if="touch" :nodes="nodes" :selected-ids="selectedIds" :category-style="categoryStyle" :counts="counts" @select="toggle" />
     <TagCascadeMenu
+      v-else
       :nodes="nodes"
       :open-path="openPath"
       :selected-ids="selectedIds"

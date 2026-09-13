@@ -13,7 +13,7 @@ import {
   mdiTagPlusOutline,
   mdiTagMultipleOutline
 } from './icons.js';
-import LanguageMenu from './components/LanguageMenu.vue';
+import SettingsMenu from './components/SettingsMenu.vue';
 import MdiIcon from './components/MdiIcon.vue';
 import TagTreeEditor from './components/TagTreeEditor.vue';
 import { requestJson } from './api.js';
@@ -231,7 +231,7 @@ onMounted(async () => {
       </div>
       <div class="top-actions">
         <var-button size="small" type="primary" :disabled="pageLoading" :loading="state.busy" @click="saveTags"><MdiIcon :path="mdiContentSaveOutline" />{{ t('save') }}</var-button>
-        <LanguageMenu v-model="selectedLocale" :options="localeOptions" :label="t('language')" @change="changeLocale" />
+        <SettingsMenu v-model="selectedLocale" :options="localeOptions" @change="changeLocale" />
       </div>
     </header>
 

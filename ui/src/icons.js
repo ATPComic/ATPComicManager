@@ -1,4 +1,6 @@
 export {
+  mdiInformationOutline,
+  mdiShieldLockOutline,
   mdiShuffleVariant,
   mdiInboxOutline,
   mdiArrowDown,

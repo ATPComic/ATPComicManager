@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { imageAspectRatio, prepareDiscoveryLayout } from '../ui/src/discovery-layout.js';
+import { setReaderAssetUrlResolver } from '../public/reader-model.js';
 
 test('layout resolves dimensions before rendering and caches stable image identities', async () => {
   let calls = 0;
@@ -26,4 +27,17 @@ test('failed dimensions use a stable fallback and cancelled preparations stop', 
   const controller = new AbortController();
   controller.abort();
   await assert.rejects(prepareDiscoveryLayout(items, { signal: controller.signal }), { name: 'AbortError' });
+});
+
+test('Pages discovery resolves real dimensions under the project base path', async () => {
+  setReaderAssetUrlResolver(() => '/ATPComicManager/__image?key=file&size=small');
+  try {
+    const result = await prepareDiscoveryLayout([{ episodeId: 'day', index: 0, file: {} }], {
+      fetchInfo: async url => {
+        assert.equal(url, '/ATPComicManager/__image?key=file&size=info');
+        return { ok: true, json: async () => ({ width: 1200, height: 800 }) };
+      }
+    });
+    assert.equal(result[0].aspectRatio, 1.5);
+  } finally { setReaderAssetUrlResolver(null); }
 });

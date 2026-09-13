@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { discoveryCandidates, shuffleDiscovery, drawDiscovery, normalizeDrawCount } from '../../../public/discovery-model.js';
+import { discoveryCandidates, shuffleDiscovery } from '../../../public/discovery-model.js';
 import DiscoveryImage from './DiscoveryImage.vue';
 import { prepareDiscoveryLayout } from '../discovery-layout.js';
 import { countTagEpisodes } from '../../../public/collection-model.js';
@@ -19,8 +19,6 @@ const props = defineProps({
 });
 const emit = defineEmits(['close', 'read']);
 const mode = ref('images');
-const drawMode = ref(false);
-const drawCount = ref(3);
 const filters = ref({});
 const items = ref([]);
 const prepared = ref([]);
@@ -47,7 +45,7 @@ async function prepareMore() {
   preparation = controller;
   preparing.value = true;
   const start = prepared.value.length;
-  const end = drawMode.value ? items.value.length : start + 60;
+  const end = start + 60;
   try {
     const batch = await prepareDiscoveryLayout(items.value.slice(start, end), { signal: controller.signal, cache: dimensionCache });
     if (!controller.signal.aborted) prepared.value = [...prepared.value, ...batch];
@@ -62,8 +60,7 @@ function refresh() {
   preparation?.abort();
   preparing.value = false;
   prepared.value = [];
-  drawCount.value = normalizeDrawCount(drawCount.value);
-  items.value = drawMode.value ? drawDiscovery(candidates.value, drawCount.value) : shuffleDiscovery(candidates.value);
+  items.value = shuffleDiscovery(candidates.value);
   void prepareMore();
   nextTick(() => scrollRoot.value?.scrollTo({ top: 0 }));
 }
@@ -74,9 +71,8 @@ function open(item) {
     previewOpen.value = true;
   }
 }
-function more() { if (!drawMode.value) void prepareMore(); }
+function more() { void prepareMore(); }
 watch(candidates, refresh, { immediate: true });
-watch(drawMode, refresh);
 onMounted(() => {
   observer = new IntersectionObserver(([entry]) => {
     if (entry.isIntersecting) more();
@@ -96,10 +92,6 @@ onBeforeUnmount(() => { observer?.disconnect(); preparation?.abort(); });
         <var-button outline :type="mode === 'covers' ? 'primary' : 'default'" :aria-pressed="mode === 'covers'" @click="mode = 'covers'">{{ t('discoveryCovers') }}</var-button>
       </var-button-group>
       <TagFilterControl v-model="filters" :categories="tags.categories" :category-style="categoryStyle" :counts="counts" />
-      <div class="draw-control"><span>{{ t('discoveryDraw') }}</span><var-switch v-model="drawMode" :aria-label="t('discoveryDraw')" /></div>
-      <template v-if="drawMode">
-        <var-input v-model="drawCount" class="draw-count" type="number" min="1" max="100" size="small" variant="outlined" :hint="false" :is-show-form-details="false" :placeholder="t('discoveryDrawCount')" :aria-label="t('discoveryDrawCount')" @blur="refresh" @keydown.enter="refresh" />
-      </template>
       <var-button round text :aria-label="t('discoveryRefresh')" :title="t('discoveryRefresh')" @click="refresh"><MdiIcon :path="mdiRefresh" /></var-button>
     </header>
     <div ref="scrollRoot" class="discovery-scroll">
@@ -112,7 +104,7 @@ onBeforeUnmount(() => { observer?.disconnect(); preparation?.abort(); });
       <p v-if="!loading && !items.length" class="empty-state">{{ t('noResults') }}</p>
       <div ref="sentinel" class="discovery-more">
         <var-skeleton v-if="preparing || loading" :rows="1" />
-        <var-button v-if="!drawMode && prepared.length < items.length" :loading="preparing" text @click="more">{{ t('discoveryMore') }}</var-button>
+        <var-button v-if="prepared.length < items.length" :loading="preparing" text @click="more">{{ t('discoveryMore') }}</var-button>
       </div>
     </div>
     <var-dialog v-model:show="previewOpen" :title="preview?.file.name" :confirm-button-text="t('back')" width="min(960px, calc(100vw - 24px))">
@@ -132,8 +124,6 @@ onBeforeUnmount(() => { observer?.disconnect(); preparation?.abort(); });
 .discovery-card { display: block; width: 100%; padding: 0; margin: 0 0 12px; break-inside: avoid; border: 0; border-radius: 8px; overflow: hidden; background: var(--surface); color: inherit; cursor: pointer; text-align: left; font: inherit; }
 .discovery-card:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .discovery-caption { display: block; padding: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-.draw-count { width: 100px; flex: none; }
-.draw-control { display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; border: 1px solid var(--outline); border-radius: 20px; font-size: 14px; }
 .discovery-toolbar :deep(.var-button-group .var-button), .discovery-toolbar :deep(.query-filter-trigger) { height: 40px; font-size: 14px; }
 .discovery-more { text-align: center; padding: 16px; }
 .discovery-preview { display: block; max-width: 100%; max-height: 72dvh; margin: auto; object-fit: contain; }

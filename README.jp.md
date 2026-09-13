@@ -102,6 +102,12 @@ npm run build
 - **デスクトップ権限**：[Electron メインプロセス](electron/main.js)と[プリロード](electron/app-preload.cjs)。レンダラー分離、IPC、ページ遷移、外部リンク処理を確認します。
 - **サプライチェーンとビルド**：`package-lock.json`、`package.json`、`.github/workflows/` の依存関係、インストールスクリプト、権限設定を確認します。
 
+### GitHub Pages / PWA
+
+`npm run build:pages` の後に `npm run preview:pages` を実行すると、`/ATPComicManager/` で静的アプリを確認できます。ディレクトリアクセスに対応したブラウザーで共有 JSON を読み込み、画像フォルダーへのアクセスを許可してください。画像は直接読み取り、サムネイルは必要に応じて生成します。
+
+公開にはリポジトリの **Settings → Pages → Source** を **GitHub Actions** に設定します。CI は Windows と Ubuntu で両方のビルドを検証し、すべて成功した後に `main` への push で `dist-pages` を公開します。`main` での手動実行でも公開でき、PR では検証のみ行います。
+
 ### アイコンのソース
 
 アイコンのソースは `design/atp-comic/` にあります。[生成スクリプト](scripts/prepare-icons.mjs)で Windows・Android アイコンを構築し、`npm run icons -- --readme` で README 用の PNG を更新します。

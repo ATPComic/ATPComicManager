@@ -17,9 +17,11 @@ export async function prepareDiscoveryLayout(items, { signal, cache = new Map(),
       let ratio = cache.get(url);
       if (!ratio) {
         ratio = imageAspectRatio(item.file.width, item.file.height);
-        if (url.startsWith('/api/thumbnail?')) {
+        const pagesImage = url.includes('/__image?');
+        if ((url.startsWith('/api/thumbnail?') || pagesImage) && !(item.file.width && item.file.height)) {
           try {
-            const response = await fetchInfo(url.replace('/api/thumbnail?', '/api/image-info?'), { signal });
+            const infoUrl = pagesImage ? url.replace(/([?&])size=[^&]*/, '$1size=info') : url.replace('/api/thumbnail?', '/api/image-info?');
+            const response = await fetchInfo(infoUrl, { signal });
             if (!response.ok) throw new Error('Image metadata unavailable');
             const info = await response.json();
             ratio = imageAspectRatio(info.width, info.height);

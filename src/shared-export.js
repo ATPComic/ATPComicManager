@@ -1,7 +1,5 @@
-import path from 'node:path';
-
 function isAbsoluteReference(value) {
-  return typeof value === 'string' && (path.posix.isAbsolute(value) || path.win32.isAbsolute(value) || /^file:/i.test(value));
+  return typeof value === 'string' && /^(?:[\\/]|[a-z]:[\\/]|file:)/i.test(value);
 }
 
 function relativeReference(value) {

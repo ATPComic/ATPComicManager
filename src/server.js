@@ -3,6 +3,7 @@ import { createReadStream } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
+import { thumbnailProfile } from '../public/thumbnail-policy.js';
 import { fileURLToPath } from 'node:url';
 import { scanWorkspace } from './scanner/scanner.js';
 import { mergeSharedLibrary, readLibrary, writeLibrary } from './model/library.js';
@@ -10,7 +11,7 @@ import { loadThemes, saveTheme, deleteTheme, renameTheme, mergeSharedThemes } fr
 import { createPlan } from './planner/planner.js';
 import { applyPlan } from './apply/apply.js';
 import { loadTagState, mergeTagStates, saveTagState } from './tag-store.js';
-import { getThumbnailPath } from './thumbnail-cache.js';
+import { getThumbnailPath, previewCacheInfo } from './thumbnail-cache.js';
 import { loadVariantAssignments, saveVariantAssignments, alignVariantTokens } from './variant-store.js';
 import { normalizeVariantAssignments } from '../public/variant-assignment-model.js';
 import { loadRecognitionState, saveRecognitionState, mergeRecognitionStates } from './recognition-store.js';
@@ -88,7 +89,7 @@ async function readBody(request) {
 }
 
 async function serveStatic(requestPath) {
-  const safePath = requestPath === '/' ? '/index.html' : requestPath;
+  const safePath = ['/privacy', '/privacy/'].includes(requestPath) ? '/privacy/index.html' : requestPath === '/' ? '/index.html' : requestPath;
   const filePath = path.resolve(publicRoot, safePath.replace(/^\//, ''));
   if (!isPathInside(publicRoot, filePath)) {
     const error = new Error('Static asset not found');
@@ -165,6 +166,13 @@ export async function startServer(config) {
         return;
       }
 
+      if (url.pathname === '/api/cache/preview' && ['GET', 'DELETE'].includes(request.method)) {
+        const library = await loadLibrary();
+        const sources = Object.values(library.episodes ?? {}).flatMap(episode => episode.files ?? []).map(file => file.absolutePath).filter(Boolean);
+        const result = await previewCacheInfo(config.thumbnailCacheRoot ?? path.join(config.workspaceRoot, '.comic-manager-cache', 'thumbnails'), sources, request.method === 'DELETE');
+        sendJson(response, 200, result);
+        return;
+      }
       if (url.pathname === '/api/variants' && request.method === 'GET') {
         sendJson(response, 200, { variantAssignments: await loadVariantAssignments(config.databasePath) });
         return;
@@ -278,7 +286,7 @@ export async function startServer(config) {
           return;
         }
         const thumbnailPath = await getThumbnailPath({
-          ...(url.searchParams.get('size') === 'preview' ? { width: 960, height: 1440, quality: 85 } : {}),
+          ...thumbnailProfile(url.searchParams.get('size')),
           sourcePath: file.absolutePath,
           cacheRoot: config.thumbnailCacheRoot ?? path.join(config.workspaceRoot, '.comic-manager-cache', 'thumbnails')
         });

@@ -3,7 +3,7 @@ import PageSkeleton from './components/PageSkeleton.vue';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { Snackbar } from '@varlet/ui';
 import { mdiAlertCircleOutline, mdiArrowRight, mdiChevronLeft, mdiRefresh } from './icons.js';
-import LanguageMenu from './components/LanguageMenu.vue';
+import SettingsMenu from './components/SettingsMenu.vue';
 import MdiIcon from './components/MdiIcon.vue';
 import { requestJson } from './api.js';
 import { navigateToPage, returnFromPage } from './navigation.js';
@@ -170,10 +170,9 @@ onMounted(async () => {
       </div>
       <nav class="top-actions">
         <var-button size="small" text :loading="refreshing" @click="refresh"><MdiIcon :path="mdiRefresh" />{{ t('refresh') }}</var-button>
-        <LanguageMenu
+        <SettingsMenu
           v-model="selectedLocale"
           :options="localeOptions"
-          :label="t('language')"
           @change="changeLocale"
         />
       </nav>

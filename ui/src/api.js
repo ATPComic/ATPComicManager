@@ -2,6 +2,13 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import missingImageUrl from '../../public/missing-image.svg?url';
 
 const AtpLibrary = registerPlugin('AtpLibrary');
+export const isPagesApp = import.meta.env?.MODE === 'pages';
+
+export async function importPagesLibrary(files, progress) {
+  if (!isPagesApp) return null;
+  const runtime = await import('./pages/runtime.js');
+  return runtime.importPagesFiles(files, progress);
+}
 
 export const isAndroidApp = Capacitor.getPlatform() === 'android';
 
@@ -16,6 +23,7 @@ export async function chooseAndroidLibrary(copyToApp = false) {
 }
 
 export async function requestJson(url, options = {}) {
+  if (isPagesApp) return (await import('./pages/runtime.js')).pagesRequest(url, options);
   if (isAndroidApp) {
     if (url === '/api/state' && (!options.method || options.method === 'GET')) return AtpLibrary.getState();
     throw new Error(`This operation is unavailable on Android: ${url}`);

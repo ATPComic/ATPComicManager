@@ -4,8 +4,8 @@ import { computed, onMounted, reactive, ref, toRaw } from 'vue';
 import { Dialog, Snackbar } from '@varlet/ui';
 import { mdiArrowRight, mdiChevronLeft, mdiContentSaveOutline, mdiDeleteOutline, mdiDragVertical, mdiImageOutline, mdiPencilOutline, mdiPlus, mdiRefresh, mdiRestore, mdiTuneVariant } from './icons.js';
 import MdiIcon from './components/MdiIcon.vue';
-import LanguageMenu from './components/LanguageMenu.vue';
-import { requestJson } from './api.js';
+import SettingsMenu from './components/SettingsMenu.vue';
+import { isPagesApp, requestJson } from './api.js';
 import { useUnsavedEdits } from './use-unsaved-edits.js';
 import { libraryEpisodePath, returnFromPage, returnPathFromHref } from './navigation.js';
 import { locale, t } from '../../public/i18n.js';
@@ -497,9 +497,9 @@ onMounted(async () => {
         <h1>{{ t('variantAssignmentTitle') }}</h1>
       </div>
       <div class="top-actions">
-        <var-button size="small" text :loading="state.busy" @click="rescan"><MdiIcon :path="mdiRefresh" />{{ t('scan') }}</var-button>
+        <var-button v-if="!isPagesApp" size="small" text :loading="state.busy" @click="rescan"><MdiIcon :path="mdiRefresh" />{{ t('scan') }}</var-button>
         <var-button size="small" type="primary" :disabled="pageLoading" :loading="state.busy" @click="saveAssignments"><MdiIcon :path="mdiContentSaveOutline" />{{ t('saveAssignments') }}</var-button>
-        <LanguageMenu v-model="selectedLocale" :options="localeOptions" :label="t('language')" @change="changeLocale" />
+        <SettingsMenu v-model="selectedLocale" :options="localeOptions" @change="changeLocale" />
       </div>
     </header>
 

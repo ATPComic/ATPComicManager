@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import sharp from 'sharp';
-import { createThumbnailWithSharp, getThumbnailPath } from '../src/thumbnail-cache.js';
+import { createThumbnailWithSharp, getThumbnailPath, previewCacheInfo } from '../src/thumbnail-cache.js';
+import { previewCacheEntry } from '../public/preview-cache.js';
 
 test('thumbnail cache generates once and reuses the derived image', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'comic-thumbnail-'));
@@ -23,6 +24,39 @@ test('thumbnail cache generates once and reuses the derived image', async () => 
   assert.equal(first, second);
   assert.equal(generationCount, 1);
   assert.equal(await fs.readFile(first, 'utf8'), 'small webp bytes');
+});
+
+test('preview cache accounting and clearing preserve small thumbnails and originals', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'comic-preview-clear-'));
+  const sourcePath = path.join(root, 'source.png');
+  await fs.writeFile(sourcePath, 'original');
+  const options = { sourcePath, cacheRoot: root, createThumbnail: async (_, target) => fs.writeFile(target, 'preview') };
+  const small = await getThumbnailPath(options);
+  const preview = await getThumbnailPath({ ...options, width: 960, height: 1440, quality: 85 });
+  assert.deepEqual(await previewCacheInfo(root, [sourcePath]), { bytes: 7, count: 1 });
+  const legacy = preview.replace('.preview.webp', '.webp');
+  await fs.rename(preview, legacy);
+  assert.deepEqual(await previewCacheInfo(root, [sourcePath]), { bytes: 7, count: 1 });
+  await previewCacheInfo(root, [sourcePath], true);
+  assert.deepEqual(await previewCacheInfo(root, [sourcePath]), { bytes: 0, count: 0 });
+  assert.equal(await fs.readFile(small, 'utf8'), 'preview');
+  assert.equal(await fs.readFile(sourcePath, 'utf8'), 'original');
+  await assert.rejects(fs.access(legacy));
+});
+
+test('Pages preview cleanup keeps small blobs, handles and unrelated data intact', () => {
+  const handle = {};
+  const small = { blob: new Blob(['small']), fingerprint: 'small' };
+  const value = { handle, thumbnails: { small, preview: { blob: new Blob(['preview']) } }, original: new Blob(['original']) };
+  const result = previewCacheEntry(value, true);
+  assert.equal(result.bytes, 7);
+  assert.equal(result.count, 1);
+  assert.equal(result.value.handle, handle);
+  assert.equal(result.value.thumbnails.small, small);
+  assert.equal(result.value.original, value.original);
+  assert.equal(result.value.thumbnails.preview, undefined);
+  assert.ok(value.thumbnails.preview);
+  assert.equal(previewCacheEntry(result.value).bytes, 0);
 });
 
 test('medium previews have separate cache entries and retain portrait detail', async () => {

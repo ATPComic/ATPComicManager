@@ -102,6 +102,12 @@ npm run build
 - **桌面权限边界**：[Electron 主进程](electron/main.js)与[预加载接口](electron/app-preload.cjs)。检查渲染进程隔离、IPC、页面导航和外部链接处理。
 - **供应链与构建**：检查 `package-lock.json`、`package.json` 和 `.github/workflows/` 中的依赖、安装脚本及权限配置。
 
+### GitHub Pages / PWA
+
+运行 `npm run build:pages`，再用 `npm run preview:pages` 在 `/ATPComicManager/` 预览静态应用。在支持目录访问的浏览器中导入分享 JSON，并授权图片目录。图片直接读取，缩略图按需生成。
+
+部署前，将仓库的 **Settings → Pages → Source** 设为 **GitHub Actions**。CI 在 Windows 和 Ubuntu 上检查两种构建；全部通过后，推送到 `main` 会部署 `dist-pages`，也可在 `main` 手动运行 CI。PR 仅执行检查。
+
 ### 图标源文件
 
 图标源文件位于 `design/atp-comic/`。[生成脚本](scripts/prepare-icons.mjs)负责构建 Windows 和 Android 图标；`npm run icons -- --readme` 更新 README 中的 PNG。

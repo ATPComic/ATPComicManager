@@ -102,6 +102,12 @@ If you would like to contribute a security review, these components and trust bo
 - **Desktop privileges**: [Electron main process](electron/main.js) and [preload interface](electron/app-preload.cjs). Review renderer isolation, IPC, navigation and external links.
 - **Supply chain and builds**: inspect dependencies, installation scripts and permissions in `package-lock.json`, `package.json` and `.github/workflows/`.
 
+### GitHub Pages / PWA
+
+Run `npm run build:pages`, then `npm run preview:pages` to test the static application at `/ATPComicManager/`. Import a shared JSON file and authorize its image folder in a browser supporting directory access. Images are read directly; thumbnails are generated on demand.
+
+For deployment, set the repository's **Settings → Pages → Source** to **GitHub Actions**. The CI workflow validates both builds on Windows and Ubuntu. After both jobs pass, pushes to `main` deploy `dist-pages`; manual CI runs on `main` can also deploy. Pull requests only run validation.
+
 ### Icon sources
 
 Icon sources live in `design/atp-comic/`. The [generator](scripts/prepare-icons.mjs) builds Windows and Android icons; `npm run icons -- --readme` refreshes the PNG used in this README.

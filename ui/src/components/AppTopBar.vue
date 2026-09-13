@@ -9,9 +9,12 @@ import {
   mdiTuneVariant
 } from '../icons.js';
 import { t } from '../../../public/i18n.js';
-import LanguageMenu from './LanguageMenu.vue';
+import SettingsMenu from './SettingsMenu.vue';
 import LibraryLocationControl from './LibraryLocationControl.vue';
 import MdiIcon from './MdiIcon.vue';
+import { isPagesApp } from '../api.js';
+import PagesLibraryControl from './PagesLibraryControl.vue';
+import AppMenuItem from './AppMenuItem.vue';
 
 defineProps({
   busyAction: { type: String, default: null },
@@ -23,6 +26,7 @@ defineProps({
 
 const emit = defineEmits([
   'change-locale',
+  'pages-imported',
   'export-json',
   'export-reading',
   'import-json',
@@ -48,30 +52,24 @@ function exportAction(name) {
       <h1>{{ t('appTitle') }}</h1>
     </div>
     <nav class="top-actions">
+      <PagesLibraryControl v-if="isPagesApp" @imported="emit('pages-imported')" />
+      <LibraryLocationControl v-else :busy-action="busyAction" :issue-count="issueCount" :library-location="libraryLocation" @scan="emit('scan')" @issues="emit('issues')" @recognition="emit('recognition')" @import-json="emit('import-json')" />
       <var-button size="small" text @click="emit('variants')"><MdiIcon :path="mdiTuneVariant" />{{ t('manualVariants') }}</var-button>
       <var-button size="small" text @click="emit('tags')"><MdiIcon :path="mdiTagMultipleOutline" />{{ t('tags') }}</var-button>
-      <LibraryLocationControl :busy-action="busyAction" :issue-count="issueCount" :library-location="libraryLocation" @scan="emit('scan')" @issues="emit('issues')" @recognition="emit('recognition')" @import-json="emit('import-json')" />
-      <var-menu v-model:show="exportOpen" placement="bottom-end" :offset-y="8" popover-class="top-export-popover">
-        <var-button size="small" type="primary" :loading="busyAction?.startsWith('export')" :disabled="!!busyAction" aria-haspopup="menu">
+      <var-menu v-model:show="exportOpen" placement="bottom-end" :offset-y="8" popover-class="app-menu-popover">
+        <var-button text size="small" :loading="busyAction?.startsWith('export')" :disabled="!!busyAction" aria-haspopup="menu">
           <MdiIcon :path="mdiExportVariant" />{{ t('exportMenu') }}
         </var-button>
         <template #menu>
           <div class="top-export-menu" role="menu">
-            <var-button block text role="menuitem" @click="exportAction('export-json')">
-              <MdiIcon :path="mdiCodeJson" />
-              <span><strong>{{ t('exportJson') }}</strong><small>{{ t('exportJsonSupporting') }}</small></span>
-            </var-button>
-            <var-button block text role="menuitem" @click="exportAction('export-reading')">
-              <MdiIcon :path="mdiFileTreeOutline" />
-              <span><strong>{{ t('exportReading') }}</strong><small>{{ t('exportReadingSupporting') }}</small></span>
-            </var-button>
+            <AppMenuItem role="menuitem" :icon="mdiCodeJson" :label="t('exportJson')" :description="t('exportJsonSupporting')" @click="exportAction('export-json')" />
+            <AppMenuItem v-if="!isPagesApp" role="menuitem" :icon="mdiFileTreeOutline" :label="t('exportReading')" :description="t('exportReadingSupporting')" @click="exportAction('export-reading')" />
           </div>
         </template>
       </var-menu>
-      <LanguageMenu
+      <SettingsMenu
         :model-value="selectedLocale"
         :options="localeOptions"
-        :label="t('language')"
         @change="emit('change-locale', $event)"
       />
     </nav>

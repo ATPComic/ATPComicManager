@@ -1,122 +1,44 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { mdiChevronDown, mdiCloseCircleOutline, mdiFilterVariant } from '../icons.js';
+import { mdiChevronDown, mdiClose, mdiFilterVariant } from '../icons.js';
 import { t } from '../../../public/i18n.js';
-import { flattenTagDefinitions } from '../../../public/tag-model.js';
+import { useTouchUi } from '../use-touch-ui.js';
 import MdiIcon from './MdiIcon.vue';
-import TagAssignmentPicker from './TagChipPicker.vue';
-
+import TagFilterPanel from './TagFilterPanel.vue';
 const props = defineProps({
-  categories: { type: Array, default: () => [] },
-  categoryStyle: { type: Function, required: true },
-  counts: { type: Object, default: () => ({}) },
-  modelValue: { type: Object, default: () => ({}) }
+  categories: { type: Array, default: () => [] }, categoryStyle: { type: Function, required: true },
+  counts: { type: Object, default: () => ({}) }, modelValue: { type: Object, default: () => ({}) }
 });
-
 const emit = defineEmits(['change', 'update:modelValue']);
 const open = ref(false);
-const activeCategoryId = ref(null);
-
-const selectedCount = computed(() => (
-  Object.values(props.modelValue).reduce((count, values) => count + (values?.length ?? 0), 0)
-));
-const activeCategory = computed(() => (
-  props.categories.find((category) => category.id === activeCategoryId.value)
-  ?? props.categories.find((category) => props.modelValue[category.id]?.length)
-  ?? props.categories[0]
-  ?? null
-));
-
-watch(open, (visible) => {
-  if (visible && !activeCategoryId.value) activeCategoryId.value = activeCategory.value?.id ?? null;
-});
-watch(() => props.categories, () => {
-  if (!props.categories.some((category) => category.id === activeCategoryId.value)) {
-    activeCategoryId.value = activeCategory.value?.id ?? null;
-  }
-}, { deep: true });
-
-function tagCount(categoryId) {
-  return props.modelValue[categoryId]?.length ?? 0;
-}
-
-function categoryEntries(category) {
-  return flattenTagDefinitions(category?.values ?? []);
-}
-
-function setSelection(categoryId, values) {
-  const next = { ...props.modelValue };
-  const normalized = [...new Set(values ?? [])];
-  if (normalized.length) next[categoryId] = normalized;
-  else delete next[categoryId];
-  emit('update:modelValue', next);
-  emit('change');
-}
-
-function clear() {
-  open.value = false;
-  emit('update:modelValue', {});
-  emit('change');
-}
+const touch = useTouchUi();
+const selected = computed(() => Object.values(props.modelValue).some(values => values?.length));
+watch(touch, () => { open.value = false; });
+function update(value) { emit('update:modelValue', value); emit('change'); }
 </script>
 
 <template>
   <div class="tag-filter-control">
-    <var-menu v-model:show="open" placement="bottom-end" :offset-y="8" popover-class="tag-filter-popover">
-      <var-button
-        class="query-filter-trigger tag-filter-trigger"
-        :class="{ active: selectedCount > 0 }"
-        size="small"
-        outline
-        :aria-expanded="open"
-        aria-haspopup="menu"
-      >
-        <MdiIcon :path="mdiFilterVariant" />
-        <span>{{ t('filterTags') }}</span>
-        <MdiIcon class="filter-chevron" :path="mdiChevronDown" />
+    <var-menu :show="open && !touch" :trigger="touch ? 'manual' : 'click'" placement="bottom-end" :offset-y="8" popover-class="tag-filter-popover" @update:show="open = $event">
+      <var-button class="query-filter-trigger tag-filter-trigger" :class="{ active: selected }" size="small" outline :aria-expanded="open" :aria-haspopup="touch ? 'dialog' : 'menu'" @click="touch && (open = !open)">
+        <MdiIcon :path="mdiFilterVariant" /><span>{{ t('filterTags') }}</span><MdiIcon class="filter-chevron" :path="mdiChevronDown" />
       </var-button>
-      <template #menu>
-        <div class="tag-filter-panel">
-          <nav class="tag-filter-categories" :aria-label="t('tagCategories')">
-            <var-badge
-              v-for="category in categories"
-              :key="category.id"
-              class="tag-category-filter-badge"
-              position="right-top"
-              :value="tagCount(category.id)"
-              :hidden="!tagCount(category.id)"
-              :offset-x="-8"
-              :offset-y="8"
-            >
-              <var-button
-                text
-                block
-                :class="{ active: activeCategory?.id === category.id }"
-                :style="categoryStyle(category.id)"
-                @click="activeCategoryId = category.id"
-              >
-                <span class="tag-emoji">{{ category.emoji || '🏷️' }}</span>
-                <span>{{ category.name }}</span>
-              </var-button>
-            </var-badge>
-          </nav>
-          <section class="tag-filter-values">
-            <header v-if="activeCategory">
-              <span class="tag-filter-category-title"><span class="tag-emoji">{{ activeCategory.emoji || '🏷️' }}</span><strong>{{ activeCategory.name }}</strong></span>
-              <var-button v-if="selectedCount" round text size="small" :aria-label="t('clearTagFilter')" @click="clear"><MdiIcon :path="mdiCloseCircleOutline" /></var-button>
-            </header>
-            <TagAssignmentPicker
-              v-if="categoryEntries(activeCategory).length"
-              :nodes="activeCategory.values"
-              :model-value="modelValue[activeCategory.id] ?? []"
-              :category-style="categoryStyle(activeCategory.id)"
-              :counts="counts[activeCategory.id] ?? {}"
-              @update:model-value="setSelection(activeCategory.id, $event)"
-            />
-            <span v-else class="muted">{{ t('emptyCategory') }}</span>
-          </section>
-        </div>
-      </template>
+      <template #menu><TagFilterPanel v-if="!touch" v-bind="props" @update:model-value="update" @close="open = false" /></template>
     </var-menu>
+    <var-popup v-if="touch" v-model:show="open" position="bottom" safe-area class="touch-tag-sheet">
+      <section role="dialog" aria-modal="true" :aria-label="t('filterTags')">
+        <header class="touch-tag-heading"><strong>{{ t('filterTags') }}</strong><var-button round text :aria-label="t('close')" @click="open = false"><MdiIcon :path="mdiClose" /></var-button></header>
+        <TagFilterPanel v-bind="props" @update:model-value="update" @close="open = false" />
+      </section>
+    </var-popup>
   </div>
 </template>
+
+<style>
+.touch-tag-sheet { width: 100%; border-radius: 20px 20px 0 0; background: var(--surface-high); }
+.touch-tag-heading { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; }
+.touch-tag-sheet .tag-filter-panel { width: 100%; max-width: 100%; height: min(65dvh, 560px); min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 58px minmax(0, 1fr); }
+.touch-tag-sheet .tag-filter-categories { display: flex; overflow-x: auto; border-right: 0; }
+.touch-tag-sheet .tag-filter-categories > .var-badge { flex: 0 0 auto; width: auto; }
+.touch-tag-sheet .tag-filter-values { overflow: auto; min-height: 0; }
+</style>

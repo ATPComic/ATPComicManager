@@ -1,25 +1,31 @@
+export function appPath(path = '/') {
+  const base = import.meta.env?.BASE_URL ?? '/';
+  if (base !== '/' && path.startsWith(base)) return path;
+  return `${base}${path.replace(/^\//, '')}`;
+}
+
 export function currentAppPath(location = window.location) {
   return `${location.pathname}${location.search}${location.hash}`;
 }
 
 export function withReturnTo(path, returnTo = currentAppPath()) {
-  const url = new URL(path, window.location.origin);
+  const url = new URL(appPath(path), window.location.origin);
   url.searchParams.set('returnTo', returnTo);
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
 export function navigateToPage(path) {
   const returnTo = currentAppPath();
-  window.location.assign(returnTo === '/' ? path : withReturnTo(path, returnTo));
+  window.location.assign(returnTo === appPath('/') ? appPath(path) : withReturnTo(path, returnTo));
 }
 
 export function libraryEpisodePath(episodeId) {
-  return episodeId ? `/?focus=${encodeURIComponent(episodeId)}` : '/';
+  return appPath(episodeId ? `/?focus=${encodeURIComponent(episodeId)}` : '/');
 }
 
 export function variantEpisodePath(episodeId) {
   const params = new URLSearchParams({ episode: episodeId, returnTo: libraryEpisodePath(episodeId) });
-  return `/variants.html?${params}`;
+  return appPath(`/variants.html?${params}`);
 }
 
 export function returnPathFromHref(href, fallback = '/') {
@@ -41,5 +47,5 @@ export function returnFromPage(fallback = '/') {
   } catch {
     // Fall through to the stable application root.
   }
-  window.location.assign(fallback);
+  window.location.assign(appPath(fallback));
 }

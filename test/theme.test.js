@@ -4,6 +4,14 @@ import { themePalette, themePresets, hsl } from '../public/theme-palette.js';
 import { contrast, oklch } from '../scripts/check-theme.mjs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { output, verifyThemePresets } from '../scripts/generate-themes.mjs';
+
+test('theme verification accepts LF and CRLF while rejecting changed palettes', () => {
+  for (const source of [output, output.replace(/\n/g, '\r\n')]) {
+    assert.doesNotThrow(() => verifyThemePresets(source));
+    assert.throws(() => verifyThemePresets(source.replace(themePresets.green.primary, '#000000')), /out of date/);
+  }
+});
 
 test('MD3 presets are reproducible with the pinned official generator', async () => {
   await promisify(execFile)(process.execPath, ['scripts/generate-themes.mjs', '--check']);

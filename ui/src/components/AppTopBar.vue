@@ -52,7 +52,7 @@ function exportAction(name) {
       <h1>{{ t('appTitle') }}</h1>
     </div>
     <nav class="top-actions">
-      <PagesLibraryControl v-if="isPagesApp" @imported="emit('pages-imported')" />
+      <PagesLibraryControl v-if="isPagesApp" @imported="emit('pages-imported')" @recognition="emit('recognition')" />
       <LibraryLocationControl v-else :busy-action="busyAction" :issue-count="issueCount" :library-location="libraryLocation" @scan="emit('scan')" @issues="emit('issues')" @recognition="emit('recognition')" @import-json="emit('import-json')" />
       <var-button size="small" text @click="emit('variants')"><MdiIcon :path="mdiTuneVariant" />{{ t('manualVariants') }}</var-button>
       <var-button size="small" text @click="emit('tags')"><MdiIcon :path="mdiTagMultipleOutline" />{{ t('tags') }}</var-button>

@@ -36,6 +36,11 @@ export async function pruneAssets(retained) {
 }
 
 export async function storeAssetEntries(entries, preserveThumbnails = false) {
+  for (let offset = 0; offset < entries.length; offset += 256) {
+    await storeAssetBatch(entries.slice(offset, offset + 256), preserveThumbnails);
+  }
+}
+async function storeAssetBatch(entries, preserveThumbnails) {
   const db = await open();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('assets', 'readwrite');
@@ -44,18 +49,11 @@ export async function storeAssetEntries(entries, preserveThumbnails = false) {
       if (!preserveThumbnails) store.put(value, key);
       else {
         const request = store.get(key);
-        request.onsuccess = () => store.put({ ...value, thumbnails: request.result?.thumbnails }, key);
+        request.onsuccess = () => store.put({ ...request.result, ...value }, key);
       }
     }
     transaction.oncomplete = resolve;
     transaction.onabort = () => reject(transaction.error);
     transaction.onerror = () => reject(transaction.error);
   });
-}
-
-export async function authorizePagesDirectory() {
-  const root = await assetStore('directory');
-  if (!root) return false;
-  return await root.queryPermission({ mode: 'read' }) === 'granted'
-    || await root.requestPermission({ mode: 'read' }) === 'granted';
 }

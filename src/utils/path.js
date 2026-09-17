@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { matchArchiveFolderName } from '../../public/folder-recognition.js';
+export { matchArchiveFolderName };
 
 export function toPosixPath(value) {
   return value.split(path.sep).join('/');
@@ -26,12 +28,4 @@ export function sortEpisodeIds(values) {
 
 export function getFolderBaseName(folderName) {
   return matchArchiveFolderName(folderName)?.date ?? folderName;
-}
-
-export function matchArchiveFolderName(folderName) {
-  const text = String(folderName ?? '');
-  const date = text.match(/(?:^|\D)(\d{8})(?!\d)/)?.[1];
-  if (date) return { layout: 'folder', date };
-  const month = text.match(/(?:^|\D)(\d{6})(?!\d)/)?.[1];
-  return month ? { layout: 'month-flat', month } : null;
 }

@@ -45,7 +45,7 @@ async function prepareMore() {
   preparation = controller;
   preparing.value = true;
   const start = prepared.value.length;
-  const end = start + 60;
+  const end = start + 12;
   try {
     const batch = await prepareDiscoveryLayout(items.value.slice(start, end), { signal: controller.signal, cache: dimensionCache });
     if (!controller.signal.aborted) prepared.value = [...prepared.value, ...batch];

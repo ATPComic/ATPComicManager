@@ -104,7 +104,9 @@ If you would like to contribute a security review, these components and trust bo
 
 ### GitHub Pages / PWA
 
-Run `npm run build:pages`, then `npm run preview:pages` to test the static application at `/ATPComicManager/`. Import a shared JSON file and authorize its image folder in a browser supporting directory access. Images are read directly; thumbnails are generated on demand.
+Run `npm run build:pages`, then `npm run preview:pages` to test the static application at `/ATPComicManager/`. Choose an image folder in a browser supporting directory access. Configure recognition rules in **Library location**, or optionally import shared JSON to restore tags, collections and arrangements. Images are read directly, and thumbnails are generated and cached on demand.
+
+While the application is visible, it checks for new files periodically and checks again when you return to it. Large folders use longer intervals to limit scanning overhead. **Rescan** refreshes the library manually. If folder access expires, **Restore access** requests permission again while preserving cached thumbnails.
 
 For deployment, set the repository's **Settings → Pages → Source** to **GitHub Actions**. The CI workflow validates both builds on Windows and Ubuntu. After both jobs pass, pushes to `main` deploy `dist-pages`; manual CI runs on `main` can also deploy. Pull requests only run validation.
 

@@ -50,13 +50,7 @@ export function mergeRecognitionStates(current, incoming) {
   });
 }
 
-export function matchesRecognitionRule(folderName, rules) {
-  const name = String(folderName ?? '');
-  return (rules ?? []).some((rule) => (
-    (!rule.prefix || name.startsWith(rule.prefix))
-    && (!rule.suffix || name.endsWith(rule.suffix))
-  ));
-}
+export { matchesRecognitionRule } from '../public/folder-recognition.js';
 
 export async function loadRecognitionState(databasePath) {
   return storageFor(databasePath).read('recognition');

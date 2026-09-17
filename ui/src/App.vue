@@ -4,10 +4,13 @@ import { useTouchUi } from './use-touch-ui.js';
 import { scrollHeaderState } from '../../public/scroll-header.js';
 import DiscoveryFeed from './components/DiscoveryFeed.vue';
 import PagesLibraryControl from './components/PagesLibraryControl.vue';
+import PagesAccessBanner from './components/PagesAccessBanner.vue';
+import { pagesText } from '../../public/locales/pages.js';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRaw } from 'vue';
 import { Dialog, Snackbar } from '@varlet/ui';
 import {
   mdiBookMultipleOutline,
+  mdiArrowDown,
   mdiBookOpenPageVariantOutline,
   mdiChevronLeft,
   mdiChevronRight,
@@ -266,10 +269,16 @@ const tagEpisodeCounts = computed(() => countTagEpisodes(
   state.tags.categories
 ));
 
-const filteredEpisodeIds = computed(() => filterScopeEpisodeIds.value.filter((episodeId) => (
+const reverseCollections = ref(false);
+const reverseEpisodes = ref(false);
+const displayedThemes = computed(() => reverseCollections.value ? [...state.themes].reverse() : state.themes);
+const filteredEpisodeIds = computed(() => {
+  const ids = filterScopeEpisodeIds.value.filter((episodeId) => (
   matchesTagFilter(state.tags.episodeTags[episodeId], state.tagFilters, state.tags.categories)
   && matchesDateFilter(episodeId, state.library.episodes[episodeId], state.dateFilter)
-)));
+));
+  return reverseEpisodes.value ? ids.reverse() : ids;
+});
 
 const visibleRows = computed(() => {
   const { start, end } = getVirtualWindow(
@@ -296,7 +305,7 @@ const selectedTagFilters = computed(() => orderedTagItems(state.tagFilters).map(
 
 const hasActiveTagFilters = computed(() => selectedTagFilters.value.length > 0);
 
-const canReorder = computed(() => !!activeTheme.value && !state.search.trim() && !hasActiveTagFilters.value);
+const canReorder = computed(() => !!activeTheme.value && !reverseEpisodes.value && !state.search.trim() && !hasActiveTagFilters.value);
 const hasCollectionTags = computed(() => !!Object.keys(activeTheme.value?.tags ?? {}).length);
 const localeOptions = computed(() => [
   { label: t('languageEnglish'), value: 'en' },
@@ -896,7 +905,10 @@ onMounted(async () => {
   }
 });
 
+function refreshPagesLibrary() { loadState().catch(error => notify(error.message, 'error')); }
+onMounted(() => window.addEventListener('pages-library-changed', refreshPagesLibrary));
 onBeforeUnmount(() => {
+  window.removeEventListener('pages-library-changed', refreshPagesLibrary);
   resizeObserver?.disconnect();
   cancelAnimationFrame(scrollFrame);
   window.removeEventListener('popstate', syncMobileNavigation);
@@ -904,6 +916,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <PagesAccessBanner v-if="isPagesApp" />
   <var-dialog v-model:show="androidImportOpen" :title="t('chooseReadingDirectory')" :cancel-button="true" @confirm="importAndroidReadingDirectory">
     <var-switch v-model="copyAndroidLibrary">{{ t('copyLibraryToApp') }}</var-switch>
     <p>{{ t('copyLibraryToAppNote') }}</p>
@@ -932,7 +945,8 @@ onBeforeUnmount(() => {
       <var-card class="collection-pane" elevation="0">
         <header class="pane-heading">
           <h2>{{ t('collections') }}</h2>
-          <PagesLibraryControl v-if="isPagesApp" @imported="loadState()" />
+          <var-button text round :aria-label="pagesText('reverse')" :title="pagesText('reverse')" :aria-pressed="reverseCollections" @click="reverseCollections = !reverseCollections"><MdiIcon :path="mdiArrowDown" :style="{ transform: reverseCollections ? 'rotate(180deg)' : '' }" /></var-button>
+          <PagesLibraryControl v-if="isPagesApp" auto-open @imported="loadState()" @recognition="openRecognitionDialog" />
           <span class="mobile-settings"><SettingsMenu v-model="selectedLocale" :options="localeOptions" @change="changeLocale" /></span>
           <var-button v-if="isAndroidApp" class="android-library-change" round text :aria-label="t('chooseReadingDirectory')" :title="t('chooseReadingDirectory')" @click="chooseAndroidReadingDirectory"><MdiIcon :path="mdiFolderOpenOutline" /></var-button>
         </header>
@@ -970,7 +984,7 @@ onBeforeUnmount(() => {
           </div>
           <PageSkeleton v-if="pageLoading" />
           <var-button
-            v-for="theme in state.themes"
+            v-for="theme in displayedThemes"
             :key="theme.title"
             block
             text
@@ -1011,6 +1025,7 @@ onBeforeUnmount(() => {
           <var-button class="mobile-pane-back" round text :aria-label="t('back')" @click="closeMobileCollection"><MdiIcon :path="mdiChevronLeft" /></var-button>
           <div><span class="overline">{{ t('episodesOverline') }}</span><h2>{{ collectionTitle }}</h2></div>
           <var-badge class="episode-total" :value="filteredEpisodeIds.length" :max-value="9999" type="info" />
+          <var-button text round :aria-label="pagesText('reverse')" :title="pagesText('reverse')" :aria-pressed="reverseEpisodes" @click="reverseEpisodes = !reverseEpisodes; dropIndex = null"><MdiIcon :path="mdiArrowDown" :style="{ transform: reverseEpisodes ? 'rotate(180deg)' : '' }" /></var-button>
           <var-button-group v-if="activeTheme" mode="outline" size="small" :elevation="false" class="collection-actions">
             <var-button outline :title="t('editCollectionTags')" :aria-label="t('editCollectionTags')" @click="openTagAssignment('collection', activeTheme.title)"><MdiIcon :path="mdiTagOutline" /></var-button>
             <var-button outline :class="{ 'is-muted-action': !hasCollectionTags }" :title="hasCollectionTags ? t('applyCollectionTags') : t('collectionNoTags')" :aria-label="t('applyCollectionTags')" @click="applyCollectionTags"><MdiIcon :path="mdiTagArrowDownOutline" /></var-button>

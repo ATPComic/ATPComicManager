@@ -21,7 +21,8 @@ export async function prepareDiscoveryLayout(items, { signal, cache = new Map(),
         if ((url.startsWith('/api/thumbnail?') || pagesImage) && !(item.file.width && item.file.height)) {
           try {
             const infoUrl = pagesImage ? url.replace(/([?&])size=[^&]*/, '$1size=info') : url.replace('/api/thumbnail?', '/api/image-info?');
-            const response = await fetchInfo(infoUrl, { signal });
+            const timeout = AbortSignal.timeout(5000);
+            const response = await fetchInfo(infoUrl, { signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
             if (!response.ok) throw new Error('Image metadata unavailable');
             const info = await response.json();
             ratio = imageAspectRatio(info.width, info.height);

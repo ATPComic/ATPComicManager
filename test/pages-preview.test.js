@@ -6,6 +6,38 @@ import { createImageQueue, thumbnailFingerprint, thumbnailProfile } from '../pub
 import { imageDimensions } from '../public/image-dimensions.js';
 import sharp from 'sharp';
 
+test('Pages cache hits require no file access and denied reads report recoverable permissions', async () => {
+  let reads = 0;
+  const messages = [];
+  const blob = new Blob(['preview'], { type: 'image/webp' });
+  const records = new Map([
+    ['cached', { handle: { getFile() { reads++; throw new DOMException('Denied', 'NotAllowedError'); } }, thumbnails: { preview: { blob, width: 100, height: 200 } } }],
+    ['denied', { handle: { getFile() { reads++; throw new DOMException('Denied', 'NotAllowedError'); } } }]
+  ]);
+  const db = { transaction() { return { objectStore() { return { get(key) {
+    const request = { result: records.get(key) };
+    queueMicrotask(() => request.onsuccess());
+    return request;
+  } }; } }; } };
+  const context = vm.createContext({
+    self: { addEventListener() {}, clients: { async matchAll() { return [{ postMessage: message => messages.push(message) }]; } } },
+    __APP_FILES__: [], createImageQueue, thumbnailFingerprint, thumbnailProfile, imageDimensions,
+    URL, Response,
+    indexedDB: { open() { const request = { result: db }; queueMicrotask(() => request.onsuccess()); return request; } }
+  });
+  vm.runInContext(await readFile(new URL('../ui/src/pages/sw.js', import.meta.url), 'utf8'), context);
+  const cached = await context.imageResponse(new URL('https://test/__image?key=cached&size=preview'));
+  assert.equal(await cached.text(), 'preview');
+  assert.equal(reads, 0);
+  const info = await context.imageResponse(new URL('https://test/__image?key=cached&size=info'));
+  assert.deepEqual(await info.json(), { width: 100, height: 200 });
+  assert.equal(reads, 0);
+  const denied = await context.imageResponse(new URL('https://test/__image?key=denied&size=preview'));
+  assert.equal(denied.status, 403);
+  assert.equal(messages[0].name, 'NotAllowedError');
+  assert.equal(reads, 1);
+});
+
 test('Pages thumbnails use shared sizes, bounded concurrency, independent caches and invalidation', async () => {
   let decodes = 0;
   let active = 0;

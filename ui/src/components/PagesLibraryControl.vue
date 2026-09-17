@@ -1,14 +1,16 @@
 <script setup>
-import { ref, shallowRef } from 'vue';
+import { ref, shallowRef, watch } from 'vue';
 import { Snackbar } from '@varlet/ui';
-import { importPagesLibrary } from '../api.js';
+import { importPagesLibrary, requestJson } from '../api.js';
 import { t } from '../../../public/i18n.js';
-import { mdiFileImportOutline, mdiFolderOpenOutline, mdiCodeJson } from '../icons.js';
+import { mdiFolderOpenOutline, mdiCodeJson } from '../icons.js';
 import MdiIcon from './MdiIcon.vue';
 import { appPath } from '../navigation.js';
-import { authorizePagesDirectory } from '../pages/assets.js';
+import { directoryAccess, restoreDirectoryAccess } from '../pages/access.js';
+import { pagesText } from '../../../public/locales/pages.js';
 
-const emit = defineEmits(['imported']);
+const props = defineProps({ autoOpen: Boolean });
+const emit = defineEmits(['imported', 'recognition']);
 const show = ref(false);
 const catalog = ref(null);
 const directory = shallowRef(null);
@@ -16,51 +18,60 @@ const directorySupported = typeof window.showDirectoryPicker === 'function';
 const busy = ref(false);
 const progress = ref('');
 const catalogInput = ref(null);
+watch(() => directoryAccess.value.status, status => { if (props.autoOpen && status === 'empty') show.value = true; }, { immediate: true });
 async function chooseDirectory() {
   try { directory.value = await window.showDirectoryPicker({ mode: 'read', id: 'atp-library' }); }
   catch (error) { if (error.name !== 'AbortError') Snackbar.error({ content: error.message }); }
 }
 async function reconnect() {
   try {
-    if (await authorizePagesDirectory()) window.location.reload();
+    if (await restoreDirectoryAccess()) emit('imported');
     else Snackbar.warning({ content: t('pagesPermissionRequired') });
   } catch (error) { Snackbar.error({ content: error.message }); }
 }
 async function start() {
-  if (!catalog.value || !directory.value || busy.value) return;
+  const root = directory.value || directoryAccess.value.root;
+  if (!root || busy.value) return;
   busy.value = true;
   try {
-    const result = await importPagesLibrary({ catalog: catalog.value, directory: directory.value }, (done, total) => { progress.value = `${done} / ${total}`; });
+    const result = await importPagesLibrary({ catalog: catalog.value, directory: root }, (done, total) => { progress.value = total ? `${done} / ${total}` : pagesText('scanned', done); });
     Snackbar[result.missingCount ? 'warning' : 'success']({ content: t(result.missingCount ? 'importJsonWarning' : 'importJsonDone', { count: result.missingCount }) });
     emit('imported');
     show.value = false;
   } catch (error) { Snackbar.error({ content: t(error.message) }); }
   finally { busy.value = false; progress.value = ''; }
 }
+async function scan() {
+  busy.value = true;
+  try { await requestJson('/api/scan', { method: 'POST' }); emit('imported'); }
+  catch (error) { Snackbar.error({ content: t(error.message) }); }
+  finally { busy.value = false; }
+}
 </script>
 
 <template>
-  <var-button size="small" text @click="show = true"><MdiIcon :path="mdiFileImportOutline" />{{ t('pagesImport') }}</var-button>
-  <var-dialog v-model:show="show" :title="t('pagesImport')" width="min(520px, calc(100vw - 32px))" :confirm-button="false" :cancel-button="false" :close-on-click-overlay="!busy">
+  <var-button size="small" text @click="show = true"><MdiIcon :path="mdiFolderOpenOutline" />{{ t('libraryLocation') }}</var-button>
+  <var-dialog v-model:show="show" :title="t('libraryLocation')" width="min(520px, calc(100vw - 32px))" :confirm-button="false" :cancel-button="false" :close-on-click-overlay="!busy">
     <div class="pages-import-fields" :aria-busy="busy">
-      <p class="import-note">{{ t('pagesImportNote') }}</p>
+      <p class="import-note">{{ pagesText('note') }}</p>
+      <div class="import-actions"><var-button text :disabled="busy || !directoryAccess.root" @click="scan">{{ pagesText('scan') }}</var-button><var-button text :disabled="busy" @click="show = false; emit('recognition')">{{ t('recognitionRules') }}</var-button></div>
       <p v-if="!directorySupported" role="status">{{ t('pagesDirectoryUnsupported') }}</p>
       <input ref="catalogInput" class="file-picker" type="file" accept=".json,application/json" :disabled="busy" tabindex="-1" @change="catalog = $event.target.files[0] || catalog">
       <section class="import-selection">
-        <div class="selection-label"><MdiIcon :path="mdiCodeJson" /><strong>{{ t('pagesSharedJson') }}</strong></div>
-        <span class="selected-name" :title="catalog?.name">{{ catalog?.name || t('importNothingSelected') }}</span>
+        <div class="selection-label"><MdiIcon :path="mdiCodeJson" /><strong>{{ pagesText('optional') }}</strong></div>
+        <span class="selected-name" :title="catalog?.name">{{ catalog?.name || t('importNothingSelected') }}<var-button v-if="catalog" size="mini" text :disabled="busy" @click="catalog = null; catalogInput.value = ''">{{ t('cancel') }}</var-button></span>
         <var-button outline :disabled="busy" @click="catalogInput.click()">{{ t('importChooseFile') }}</var-button>
       </section>
       <section class="import-selection">
         <div class="selection-label"><MdiIcon :path="mdiFolderOpenOutline" /><strong>{{ t('libraryLocation') }}</strong></div>
-        <span class="selected-name" :title="directory?.name">{{ directory?.name || t('importNothingSelected') }}</span>
+        <span class="selected-name" :title="directory?.name || directoryAccess.root?.name">{{ directory?.name || directoryAccess.root?.name || t('importNothingSelected') }}</span>
         <var-button outline :disabled="busy || !directorySupported" @click="chooseDirectory">{{ t('pagesImageFolder') }}</var-button>
       </section>
       <div class="import-support"><var-button size="small" text :disabled="busy || !directorySupported" @click="reconnect">{{ t('pagesReconnect') }}</var-button><a :href="appPath('/privacy/')" target="_blank" rel="noopener">{{ t('privacy') }}</a></div>
       <p v-if="busy" class="import-progress" role="status" aria-live="polite">{{ progress || t('importIndexing') }}</p>
       <div class="import-actions">
         <var-button text :disabled="busy" @click="show = false">{{ t('cancel') }}</var-button>
-        <var-button type="primary" :loading="busy" :disabled="!catalog || !directory || busy" @click="start">{{ t('pagesImport') }}</var-button>
+        <var-button type="primary" :loading="busy" :disabled="(!directory && !directoryAccess.root) || busy" @click="start">{{ pagesText('open') }}</var-button>
       </div>
     </div>
   </var-dialog>

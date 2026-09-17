@@ -5,6 +5,8 @@ import { applyVariantAssignments } from '../../../src/model/variant-assignments.
 import { portableLibrary, assertPortableJson } from '../../../src/shared-export.js';
 import { assetStore, pruneAssets, storeAssetEntries } from './assets.js';
 import { collectDirectoryFiles, indexImportedFiles, matchImportedFile, readSharedCatalog } from './import-model.js';
+import { scanDirectoryRecords } from './scan-model.js';
+import { checkDirectoryAccess, reportDirectoryError } from './access.js';
 
 let worker;
 let nextId = 0;
@@ -37,6 +39,11 @@ export function initializePages() {
     await navigator.serviceWorker.ready;
     if (!navigator.serviceWorker.controller) await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
     state = await database('load');
+    await checkDirectoryAccess();
+    navigator.serviceWorker.addEventListener('message', event => {
+      if (event.data?.type === 'pages-file-error') reportDirectoryError(event.data.name);
+    });
+    startDirectoryMonitor();
     setReaderAssetUrlResolver((kind, episode, index, identity, size) => {
       const files = state.library.episodes[episode]?.files ?? [];
       const file = identity ? (files[index]?.assetKey === identity ? files[index] : files.find(candidate => candidate.assetKey === identity)) : files[index];
@@ -50,14 +57,20 @@ async function persist(next) {
   return structuredClone(state);
 }
 
-export async function importPagesFiles({ catalog, directory }, progress = () => {}) {
+export function importPagesFiles(input, progress) {
+  const operation = operations.then(() => importDirectory(input, progress));
+  operations = operation.catch(() => {});
+  return operation;
+}
+async function importDirectory({ catalog, directory }, progress = () => {}) {
   await initializePages();
-  const next = readSharedCatalog(JSON.parse(await catalog.text()));
+  const next = catalog ? readSharedCatalog(JSON.parse(await catalog.text())) : structuredClone(state);
   const previousDirectory = await assetStore('directory');
   const sameDirectory = previousDirectory && await directory.isSameEntry(previousDirectory);
   const previousNamespace = sameDirectory ? await assetStore('directoryNamespace') : null;
   const namespace = previousNamespace || crypto.randomUUID();
-  const files = await collectDirectoryFiles(directory);
+  const files = await collectDirectoryFiles(directory, progress);
+  if (!catalog) next.library = scanDirectoryRecords(files, next, namespace);
   const fileIndex = indexImportedFiles(files);
   const references = Object.values(next.library.episodes).flatMap(episode => episode.files);
   const imported = new Map();
@@ -78,13 +91,60 @@ export async function importPagesFiles({ catalog, directory }, progress = () => 
       if (cached) Object.assign(reference, cached);
     }
     if (reference.missing) missing++;
-    progress(index + 1, references.length);
+    if (index % 128 === 0 || index + 1 === references.length) progress(index + 1, references.length);
   }
   await storeAssetEntries(entries, !!sameDirectory);
   await persist(next);
   await storeAssetEntries([['directory', directory], ['directoryNamespace', namespace]]);
-  await pruneAssets(new Set(['directory', 'directoryNamespace', ...references.filter(file => !file.missing).map(file => file.assetKey)]));
+  await checkDirectoryAccess();
+  await pruneAssets(new Set(['directory', 'directoryNamespace', ...references.map(file => file.assetKey).filter(Boolean)]));
+  scanSignature = undefined;
   return { missingCount: missing };
+}
+
+let scanSignature;
+async function rescanDirectory() {
+  if (!await checkDirectoryAccess()) throw new Error('pagesPermissionRequired');
+  const root = await assetStore('directory');
+  const namespace = await assetStore('directoryNamespace');
+  try {
+    const files = await collectDirectoryFiles(root);
+    const signature = files.map(file => file.webkitRelativePath).sort().join('\n') + JSON.stringify(state.recognition);
+    if (signature === scanSignature) return { library: structuredClone(state.library) };
+    const next = structuredClone(state);
+    next.library = scanDirectoryRecords(files, next, namespace);
+    const existing = new Set(Object.values(state.library.episodes).flatMap(episode => episode.files.filter(file => !file.missing).map(file => file.assetKey)));
+    const entries = files.map(file => [`${namespace}:${file.webkitRelativePath.split('/').slice(1).join('/')}`, { handle: file.handle }]).filter(([key]) => !existing.has(key));
+    await storeAssetEntries(entries, true);
+    await persist(next);
+    scanSignature = signature;
+    window.dispatchEvent(new Event('pages-library-changed'));
+    return { library: structuredClone(state.library) };
+  } catch (error) { reportDirectoryError(error); throw error; }
+}
+
+function startDirectoryMonitor() {
+  let timer, running = false, last = 0;
+  async function check() {
+    clearTimeout(timer);
+    if (running) return;
+    if (document.visibilityState !== 'visible') return;
+    running = true;
+    const started = Date.now();
+    try {
+      if (started - last >= 15000 && await checkDirectoryAccess()) {
+        await pagesRequest('/api/scan'); last = Date.now();
+      }
+    } catch { /* The access status exposes errors without interrupting reading. */ }
+    finally {
+      running = false;
+      timer = setTimeout(check, Math.max(60000, (Date.now() - started) * 3));
+    }
+  }
+  timer = setTimeout(check, 15000);
+  document.addEventListener('visibilitychange', check);
+  window.addEventListener('pages-assets-restored', check);
+  window.addEventListener('pagehide', () => clearTimeout(timer), { once: true });
 }
 
 let operations = Promise.resolve();
@@ -104,7 +164,7 @@ async function handleRequest(url, options = {}) {
     return response.json();
   }
   if (url === '/api/state') return structuredClone({ ...state, initialized: true, runtime: { workspaceRoot: '' } });
-  if (url === '/api/scan') return { library: structuredClone(state.library) };
+  if (url === '/api/scan') return rescanDirectory();
   if (url === '/api/variants' && method === 'GET') return { variantAssignments: structuredClone(state.variantAssignments) };
   if (url === '/api/export/json') {
     const exported = { library: portableLibrary(state.library), tags: state.tags, variants: state.variantAssignments, themes: state.themes, recognition: state.recognition };
@@ -131,5 +191,9 @@ async function handleRequest(url, options = {}) {
     else { const theme = next.themes.find(theme => theme.title === title); if (theme) theme.title = body.title; }
   } else throw new Error(t('pagesUnavailable'));
   const saved = await persist(next);
+  if (url === '/api/recognition' && await checkDirectoryAccess()) {
+    await rescanDirectory();
+    return { ok: true, ...structuredClone(state) };
+  }
   return { ok: true, ...saved };
 }

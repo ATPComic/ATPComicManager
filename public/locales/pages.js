@@ -1,0 +1,8 @@
+import { locale } from '../i18n.js';
+const labels = {
+  en: { note: 'Choose an image folder to discover your library locally. A shared JSON file is optional and restores tags, collections and arrangements.', optional: 'Shared JSON (optional)', open: 'Open library', scan: 'Rescan', reverse: 'Reverse order', permission: 'Folder access needs permission. Cached previews remain available.', readError: 'Some images could not be read. Retry access or reselect the folder.', retry: 'Restore access', scanning: 'Checking folders…', scanned: 'Images found: {count}' },
+  'zh-CN': { note: '选择图片目录，即可在本地识别图库。也可选择分享 JSON，恢复标签、合集和编排。', optional: '分享 JSON（可选）', open: '打开图库', scan: '重新扫描', reverse: '倒序排列', permission: '目录访问需要重新授权，已缓存的预览图仍可使用。', readError: '部分图片读取失败，请重试访问或重新选择目录。', retry: '重新授权', scanning: '正在检查目录…', scanned: '已发现 {count} 张图片' },
+  'zh-TW': { note: '選擇圖片目錄，即可在本機辨識圖庫。也可選擇分享 JSON，還原標籤、合集與編排。', optional: '分享 JSON（選填）', open: '開啟圖庫', scan: '重新掃描', reverse: '反向排列', permission: '目錄存取需要重新授權，已快取的預覽圖仍可使用。', readError: '部分圖片讀取失敗，請重試存取或重新選擇目錄。', retry: '重新授權', scanning: '正在檢查目錄…', scanned: '已找到 {count} 張圖片' },
+  ja: { note: '画像フォルダーを選ぶと、端末内でライブラリを検出します。共有 JSON を選ぶとタグ、コレクション、編集内容も復元できます。', optional: '共有 JSON（任意）', open: 'ライブラリを開く', scan: '再スキャン', reverse: '逆順に表示', permission: 'フォルダーへのアクセス許可が必要です。保存済みのプレビューは引き続き使えます。', readError: '一部の画像を読み取れません。アクセスを再試行するか、フォルダーを選び直してください。', retry: 'アクセスを許可', scanning: 'フォルダーを確認中…', scanned: '{count} 枚の画像を検出' }
+};
+export function pagesText(key, count) { return (labels[locale] ?? labels.en)[key]?.replace('{count}', count) ?? key; }

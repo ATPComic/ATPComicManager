@@ -1,8 +1,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { discoveryCandidates, shuffleDiscovery } from '../../../public/discovery-model.js';
+import { discoveryCandidates, discoverySignature, shuffleDiscovery } from '../../../public/discovery-model.js';
 import DiscoveryImage from './DiscoveryImage.vue';
-import { prepareDiscoveryLayout } from '../discovery-layout.js';
+import { discoveryColumnCount, discoveryColumnGap, masonryColumns, prepareDiscoveryLayout } from '../discovery-layout.js';
 import { countTagEpisodes } from '../../../public/collection-model.js';
 import { getImageUrl, getThumbnailUrl } from '../../../public/reader-model.js';
 import { t } from '../../../public/i18n.js';
@@ -22,15 +22,26 @@ const mode = ref('images');
 const filters = ref({});
 const items = ref([]);
 const prepared = ref([]);
-const batches = ref([]);
 const preparing = ref(false);
 const scrollRoot = ref(null);
+const masonry = ref(null);
 const sentinel = ref(null);
 const preview = ref(null);
 const previewOpen = ref(false);
+const containerWidth = ref(0);
 const counts = computed(() => countTagEpisodes(Object.keys(props.library.episodes ?? {}), props.tags.episodeTags, props.tags.categories));
 const candidates = computed(() => discoveryCandidates(props.library, props.tags, filters.value, mode.value));
+const candidateSignature = computed(() => discoverySignature(candidates.value));
+const columnCount = computed(() => discoveryColumnCount(containerWidth.value));
+const columnGap = computed(() => discoveryColumnGap(containerWidth.value));
+const columnWidth = computed(() => {
+  const count = columnCount.value;
+  if (!count || containerWidth.value <= 0) return 0;
+  return Math.max(1, (containerWidth.value - (count - 1) * columnGap.value) / count);
+});
+const columns = computed(() => masonryColumns(prepared.value, columnCount.value, columnWidth.value, columnGap.value));
 let observer;
+let resizeObserver;
 let preparation;
 const dimensionCache = new Map();
 
@@ -43,10 +54,7 @@ async function prepareMore() {
   const end = start + 12;
   try {
     const batch = await prepareDiscoveryLayout(items.value.slice(start, end), { signal: controller.signal, cache: dimensionCache });
-    if (!controller.signal.aborted) {
-      prepared.value = [...prepared.value, ...batch];
-      batches.value = [...batches.value, batch];
-    }
+    if (!controller.signal.aborted) prepared.value = [...prepared.value, ...batch];
   } catch (error) {
     if (!controller.signal.aborted) throw error;
   } finally {
@@ -58,7 +66,6 @@ function refresh() {
   preparation?.abort();
   preparing.value = false;
   prepared.value = [];
-  batches.value = [];
   items.value = shuffleDiscovery(candidates.value);
   void prepareMore();
   nextTick(() => scrollRoot.value?.scrollTo({ top: 0 }));
@@ -71,14 +78,17 @@ function open(item) {
   }
 }
 function more() { void prepareMore(); }
-watch(candidates, refresh, { immediate: true });
+watch(candidateSignature, refresh, { immediate: true });
 onMounted(() => {
+  containerWidth.value = masonry.value?.clientWidth ?? 0;
   observer = new IntersectionObserver(([entry]) => {
     if (entry.isIntersecting) more();
   }, { root: scrollRoot.value, rootMargin: '500px' });
   observer.observe(sentinel.value);
+  resizeObserver = new ResizeObserver(([entry]) => { containerWidth.value = entry.contentRect.width; });
+  resizeObserver.observe(masonry.value);
 });
-onBeforeUnmount(() => { observer?.disconnect(); preparation?.abort(); });
+onBeforeUnmount(() => { observer?.disconnect(); resizeObserver?.disconnect(); preparation?.abort(); });
 </script>
 
 <template>
@@ -94,11 +104,13 @@ onBeforeUnmount(() => { observer?.disconnect(); preparation?.abort(); });
       <var-button round text :aria-label="t('discoveryRefresh')" :title="t('discoveryRefresh')" @click="refresh"><MdiIcon :path="mdiRefresh" /></var-button>
     </header>
     <div ref="scrollRoot" class="discovery-scroll">
-      <div v-for="(batch, batchIndex) in batches" :key="batchIndex" class="discovery-masonry">
-        <button v-for="item in batch" :key="JSON.stringify([item.episodeId, item.index])" class="discovery-card" type="button" @click="open(item)">
-          <DiscoveryImage :src="getThumbnailUrl(item.episodeId, item.index, item.file.assetKey, 'preview')" :alt="item.file.name" :aspect-ratio="item.aspectRatio" />
-          <span class="discovery-caption">{{ episodeLabel(item.episodeId) }}</span>
-        </button>
+      <div ref="masonry" class="discovery-masonry" :style="{ '--discovery-gap': `${columnGap}px`, gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }">
+        <div v-for="(column, columnIndex) in columns" :key="columnIndex" class="discovery-column">
+          <button v-for="item in column" :key="JSON.stringify([item.episodeId, item.index])" class="discovery-card" type="button" @click="open(item)">
+            <DiscoveryImage :src="getThumbnailUrl(item.episodeId, item.index, item.file.assetKey, 'preview')" :alt="item.file.name" :aspect-ratio="item.aspectRatio" />
+            <span class="discovery-caption">{{ episodeLabel(item.episodeId) }}</span>
+          </button>
+        </div>
       </div>
       <p v-if="!loading && !items.length" class="empty-state">{{ t('noResults') }}</p>
       <div ref="sentinel" class="discovery-more">
@@ -119,8 +131,9 @@ onBeforeUnmount(() => { observer?.disconnect(); preparation?.abort(); });
 .discovery-toolbar { display: flex; align-items: center; gap: 12px; padding: 12px 20px; flex-wrap: wrap; }
 .discovery-toolbar h2 { font-size: 18px; margin: 0 auto 0 0; }
 .discovery-scroll { overflow-y: auto; flex: 1; min-height: 0; padding: 0 16px; }
-.discovery-masonry { columns: 5 220px; column-gap: 12px; }
-.discovery-card { display: block; width: 100%; padding: 0; margin: 0 0 12px; break-inside: avoid; border: 0; border-radius: 8px; overflow: hidden; background: var(--surface); color: inherit; cursor: pointer; text-align: left; font: inherit; }
+.discovery-masonry { display: grid; align-items: start; column-gap: var(--discovery-gap); }
+.discovery-column { display: flex; flex-direction: column; gap: var(--discovery-gap); min-width: 0; }
+.discovery-card { display: block; width: 100%; padding: 0; margin: 0; border: 0; border-radius: 8px; overflow: hidden; background: var(--surface); color: inherit; cursor: pointer; text-align: left; font: inherit; }
 .discovery-card:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .discovery-caption { display: block; padding: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .discovery-toolbar :deep(.var-button-group .var-button), .discovery-toolbar :deep(.query-filter-trigger) { height: 40px; font-size: 14px; }
@@ -131,7 +144,6 @@ onBeforeUnmount(() => { observer?.disconnect(); preparation?.abort(); });
   .discovery-toolbar h2 { flex: 1; }
   .discovery-toolbar :deep(.var-button-group) { order: 1; width: 100%; }
   .discovery-toolbar :deep(.var-button-group .var-button) { flex: 1; }
-  .discovery-masonry { columns: 2; column-gap: 8px; }
   .discovery-scroll { padding: 0 8px; }
 }
 </style>

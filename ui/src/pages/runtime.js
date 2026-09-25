@@ -126,19 +126,30 @@ async function importDirectory({ catalog, directory }, progress = () => {}) {
   await storeAssetEntries([['directory', directory], ['directoryNamespace', namespace]]);
   await checkDirectoryAccess();
   await pruneAssets(new Set(['directory', 'directoryNamespace', ...references.map(file => file.assetKey).filter(Boolean)]));
-  scanSignature = undefined;
+  scanSignature = directorySignature(files);
   return { missingCount: missing };
 }
 
 let scanSignature;
+function directorySignature(files) {
+  return files.map(file => file.webkitRelativePath).sort().join('\n') + JSON.stringify(state.recognition);
+}
+function librarySignature(library) {
+  return Object.entries(library?.episodes ?? {})
+    .flatMap(([id, episode]) => (episode.files ?? []).map(file => `${id}\u0000${file.relativePath ?? ''}\u0000${file.assetKey ?? ''}\u0000${file.missing ? 1 : 0}`))
+    .sort()
+    .join('\u0001');
+}
 async function rescanDirectory() {
   if (!await checkDirectoryAccess()) throw new Error('pagesPermissionRequired');
   const root = await assetStore('directory');
   const namespace = await assetStore('directoryNamespace');
   try {
     const files = await collectDirectoryFiles(root);
-    const signature = files.map(file => file.webkitRelativePath).sort().join('\n') + JSON.stringify(state.recognition);
+    const signature = directorySignature(files);
     if (signature === scanSignature) return { library: structuredClone(state.library) };
+    const firstScan = scanSignature === undefined;
+    const previousLibrary = firstScan ? librarySignature(state.library) : null;
     const next = structuredClone(state);
     next.library = scanDirectoryRecords(files, next, namespace);
     const existing = new Set(Object.values(state.library.episodes).flatMap(episode => episode.files.filter(file => !file.missing).map(file => file.assetKey)));
@@ -146,7 +157,7 @@ async function rescanDirectory() {
     await storeAssetEntries(entries, true);
     await persist(next);
     scanSignature = signature;
-    window.dispatchEvent(new Event('pages-library-changed'));
+    if (!firstScan || librarySignature(next.library) !== previousLibrary) window.dispatchEvent(new Event('pages-library-changed'));
     return { library: structuredClone(state.library) };
   } catch (error) { reportDirectoryError(error); throw error; }
 }

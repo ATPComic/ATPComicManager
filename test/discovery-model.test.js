@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { discoveryCandidates, shuffleDiscovery } from '../public/discovery-model.js';
+import { discoveryCandidates, discoverySignature, shuffleDiscovery } from '../public/discovery-model.js';
 import { getThumbnailUrl } from '../public/reader-model.js';
 
 
@@ -49,4 +49,13 @@ test('shuffle preserves every candidate exactly once without mutating the source
   assert.deepEqual(result, [2, 3, 4, 1]);
   assert.deepEqual([...result].sort(), original);
   assert.deepEqual(shuffleDiscovery([]), []);
+});
+
+test('discovery signature ignores order but tracks identity and readability changes', () => {
+  const first = { episodeId: 'a', index: 0, file: { assetKey: 'k1' }, readable: true };
+  const second = { episodeId: 'b', index: 1, file: { assetKey: 'k2' }, readable: false };
+  assert.equal(discoverySignature([first, second]), discoverySignature([second, first]));
+  assert.notEqual(discoverySignature([first, second]), discoverySignature([{ ...first, readable: false }, second]));
+  assert.notEqual(discoverySignature([first, second]), discoverySignature([{ ...first, file: { assetKey: 'moved' } }, second]));
+  assert.equal(discoverySignature([]), '');
 });

@@ -35,6 +35,17 @@ export async function pruneAssets(retained) {
   });
 }
 
+export async function clearAssetStore() {
+  const db = await open();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('assets', 'readwrite');
+    transaction.objectStore('assets').clear();
+    transaction.oncomplete = resolve;
+    transaction.onabort = () => reject(transaction.error);
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
 export async function storeAssetEntries(entries, preserveThumbnails = false) {
   for (let offset = 0; offset < entries.length; offset += 256) {
     await storeAssetBatch(entries.slice(offset, offset + 256), preserveThumbnails);

@@ -23,7 +23,7 @@ test('page entries share the brand theme and settings items share a style', asyn
     assert.doesNotMatch(source, /Themes.md3Dark/);
   }
   const about = await readFile(new URL('../ui/src/components/SettingsMenu.vue', import.meta.url), 'utf8');
-  assert.equal((about.match(/<AppMenuItem /g) ?? []).length, 1);
+  assert.equal((about.match(/<AppMenuItem /g) ?? []).length, 2);
   assert.match(about, /class="about-links"/);
   assert.match(about, /href="https:\/\/github.com\/ATPComic\/ATPComicManager"/);
   assert.doesNotMatch(about, /<AppMenuItem[^>]+privacy/);

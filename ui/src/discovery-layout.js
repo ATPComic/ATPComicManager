@@ -5,6 +5,44 @@ export function imageAspectRatio(width, height) {
     ? Number(width) / Number(height) : 2 / 3;
 }
 
+export const DISCOVERY_MAX_COLUMNS = 5;
+export const DISCOVERY_COLUMN_GAP = 12;
+const MOBILE_COLUMN_GAP = 8;
+const MOBILE_MAX_WIDTH = 600;
+const COLUMN_TARGET_WIDTH = 220;
+const CAPTION_HEIGHT = 32;
+
+export function discoveryColumnCount(width) {
+  const available = Number(width);
+  if (!Number.isFinite(available) || available <= 0) return 1;
+  if (available <= MOBILE_MAX_WIDTH) return 2;
+  return Math.max(1, Math.min(DISCOVERY_MAX_COLUMNS, Math.floor((available + DISCOVERY_COLUMN_GAP) / (COLUMN_TARGET_WIDTH + DISCOVERY_COLUMN_GAP))));
+}
+
+export function discoveryColumnGap(width) {
+  return Number(width) <= MOBILE_MAX_WIDTH ? MOBILE_COLUMN_GAP : DISCOVERY_COLUMN_GAP;
+}
+
+export function masonryItemsHeight(item, columnWidth) {
+  const ratio = Number(item?.aspectRatio) > 0 ? Number(item.aspectRatio) : 2 / 3;
+  return Number(columnWidth) / ratio + CAPTION_HEIGHT;
+}
+
+export function masonryColumns(items, columnCount, columnWidth, gap = 0) {
+  const count = Math.max(1, Math.floor(Number(columnCount) || 1));
+  const columns = Array.from({ length: count }, () => []);
+  const heights = new Array(count).fill(0);
+  for (const item of items ?? []) {
+    let target = 0;
+    for (let index = 1; index < count; index += 1) {
+      if (heights[index] < heights[target]) target = index;
+    }
+    columns[target].push(item);
+    heights[target] += masonryItemsHeight(item, columnWidth) + gap;
+  }
+  return columns;
+}
+
 export async function prepareDiscoveryLayout(items, { signal, cache = new Map(), fetchInfo = fetch } = {}) {
   let cursor = 0;
   const result = new Array(items.length);

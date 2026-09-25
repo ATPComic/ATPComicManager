@@ -24,3 +24,10 @@ export function shuffleDiscovery(items, random = Math.random) {
   }
   return result;
 }
+
+export function discoverySignature(items) {
+  return (items ?? [])
+    .map((item) => `${item.episodeId}\u0000${item.index}\u0000${item.file?.assetKey ?? ''}\u0000${item.readable ? 1 : 0}`)
+    .sort()
+    .join('\u0001');
+}

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { scanDirectoryRecords } from '../ui/src/pages/scan-model.js';
-import { collectDirectoryFiles, indexImportedFiles, matchImportedFile } from '../ui/src/pages/import-model.js';
+import { collectDirectoryFiles, emptyLibraryState, indexImportedFiles, matchImportedFile } from '../ui/src/pages/import-model.js';
 
 const initial = () => ({ library: { episodes: {} }, recognition: { rules: [], identityMarkers: [], episodeDates: {} }, variantAssignments: { version: 3, episodes: {} } });
 const file = path => ({ name: path.split('/').at(-1), webkitRelativePath: `Root/${path}` });
@@ -61,4 +61,13 @@ test('Pages import matches renamed dated titles with monthly priority', () => {
   const monthly = file('202601/20260101_changed_a1.png');
   const index = indexImportedFiles([file('20260101/20260101_a1.png'), monthly]);
   assert.equal(matchImportedFile({ name: '20260101_old_a1.png', relativePath: 'elsewhere/20260101_old_a1.png' }, index), monthly);
+});
+
+test('Pages reselecting a different folder starts from a fresh library state', () => {
+  const state = emptyLibraryState();
+  assert.deepEqual(state.tags, { version: 3, categories: [], episodeTags: {} });
+  assert.deepEqual(state.themes, []);
+  const library = scanDirectoryRecords([file('202601/20260101_a1.png')], state, 'fresh');
+  assert.deepEqual(Object.keys(library.episodes), ['20260101']);
+  assert.equal(library.episodes['20260101'].files[0].assetKey, 'fresh:202601/20260101_a1.png');
 });

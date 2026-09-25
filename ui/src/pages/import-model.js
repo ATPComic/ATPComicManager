@@ -33,6 +33,16 @@ export function readSharedCatalog(input) {
   };
 }
 
+export function emptyLibraryState() {
+  return {
+    library: { episodes: {}, warnings: [] },
+    themes: [],
+    tags: { version: 3, categories: [], episodeTags: {} },
+    recognition: { version: 1, rules: [], identityMarkers: [], episodeDates: {} },
+    variantAssignments: { version: 3, peekRelations: {}, episodes: {} }
+  };
+}
+
 export function indexImportedFiles(files) {
   const paths = new Map();
   const names = new Map();

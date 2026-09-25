@@ -3,8 +3,8 @@ import { setReaderAssetUrlResolver } from '../../../public/reader-model.js';
 import { normalizeVariantAssignments } from '../../../public/variant-assignment-model.js';
 import { applyVariantAssignments } from '../../../src/model/variant-assignments.js';
 import { portableLibrary, assertPortableJson } from '../../../src/shared-export.js';
-import { assetStore, pruneAssets, storeAssetEntries } from './assets.js';
-import { collectDirectoryFiles, indexImportedFiles, matchImportedFile, readSharedCatalog } from './import-model.js';
+import { assetStore, clearAssetStore, pruneAssets, storeAssetEntries } from './assets.js';
+import { collectDirectoryFiles, emptyLibraryState, indexImportedFiles, matchImportedFile, readSharedCatalog } from './import-model.js';
 import { scanDirectoryRecords } from './scan-model.js';
 import { checkDirectoryAccess, reportDirectoryError } from './access.js';
 
@@ -23,7 +23,7 @@ function database(operation, state) {
       else pending?.resolve(data.result);
     };
     worker.onerror = () => { for (const pending of requests.values()) pending.reject(new Error(t('pagesStorageError'))); requests.clear(); };
-    window.addEventListener('pagehide', () => worker.terminate(), { once: true });
+    window.addEventListener('pagehide', () => worker?.terminate(), { once: true });
     window.addEventListener('pageshow', event => { if (event.persisted) window.location.reload(); });
   }
   return new Promise((resolve, reject) => {
@@ -57,6 +57,32 @@ async function persist(next) {
   return structuredClone(state);
 }
 
+const OPFS_DATABASE_DIRECTORY = 'atp-comic-pages-v1';
+export async function resetPagesData() {
+  try { worker?.terminate(); } catch { /* The worker may already be stopped. */ }
+  worker = undefined;
+  requests.clear();
+  state = undefined;
+  initializing = undefined;
+  try { await clearAssetStore(); } catch { /* Browser storage may already be unusable. */ }
+  let removedOpfs = false;
+  try {
+    const root = await navigator.storage?.getDirectory?.();
+    if (root) {
+      await root.removeEntry(OPFS_DATABASE_DIRECTORY, { recursive: true });
+      removedOpfs = true;
+    }
+  } catch { /* The directory may be locked by another tab; fall back to clearing it. */ }
+  if (!removedOpfs) {
+    try { await database('save', emptyLibraryState()); } catch { /* The catalog will be recreated on demand. */ }
+  }
+  try { for (const name of await caches.keys()) await caches.delete(name); } catch { /* Cache storage can be unavailable. */ }
+  try {
+    for (const registration of await navigator.serviceWorker.getRegistrations()) await registration.unregister();
+  } catch { /* Service workers can be unavailable outside secure contexts. */ }
+  window.location.reload();
+}
+
 export function importPagesFiles(input, progress) {
   const operation = operations.then(() => importDirectory(input, progress));
   operations = operation.catch(() => {});
@@ -64,9 +90,11 @@ export function importPagesFiles(input, progress) {
 }
 async function importDirectory({ catalog, directory }, progress = () => {}) {
   await initializePages();
-  const next = catalog ? readSharedCatalog(JSON.parse(await catalog.text())) : structuredClone(state);
   const previousDirectory = await assetStore('directory');
-  const sameDirectory = previousDirectory && await directory.isSameEntry(previousDirectory);
+  const sameDirectory = previousDirectory ? await directory.isSameEntry(previousDirectory) : false;
+  const next = catalog
+    ? readSharedCatalog(JSON.parse(await catalog.text()))
+    : sameDirectory ? structuredClone(state) : emptyLibraryState();
   const previousNamespace = sameDirectory ? await assetStore('directoryNamespace') : null;
   const namespace = previousNamespace || crypto.randomUUID();
   const files = await collectDirectoryFiles(directory, progress);

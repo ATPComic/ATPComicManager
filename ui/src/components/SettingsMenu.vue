@@ -1,11 +1,13 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { Snackbar } from '@varlet/ui';
 import { t } from '../../../public/i18n.js';
 import { settingsLabels } from '../../../public/locales/settings.js';
 import { themePresets } from '../../../public/theme-palette.js';
 import { version } from '../../../package.json';
 import { appPath } from '../navigation.js';
-import { isAndroidApp } from '../api.js';
+import { isAndroidApp, isPagesApp, resetPagesStorage } from '../api.js';
+import { downloadLibraryBackup } from '../pages/backup.js';
 import { selectedTheme, selectTheme } from '../theme.js';
 import { mdiCogOutline, mdiInformationOutline, mdiDeleteOutline, mdiCheck, mdiTranslate, mdiPaletteOutline } from '../icons.js';
 import MdiIcon from './MdiIcon.vue';
@@ -18,12 +20,29 @@ const labels = computed(() => settingsLabels[props.modelValue] ?? settingsLabels
 const text = key => t(key, {}, props.modelValue);
 const open = ref(false);
 const cache = ref(null);
+const resetOpen = ref(false);
+const resetting = ref(false);
+const backingUp = ref(false);
 function changeLanguage(value) {
   if (value === props.modelValue) return;
   emit('update:modelValue', value);
   emit('change', value);
 }
 function openCache() { open.value = false; cache.value.open(); }
+function openReset() { open.value = false; resetOpen.value = true; }
+async function backup() {
+  if (backingUp.value) return;
+  backingUp.value = true;
+  try { await downloadLibraryBackup(); Snackbar.success({ content: text('exportJsonDone') }); }
+  catch { Snackbar.error({ content: text('exportFailed') }); }
+  finally { backingUp.value = false; }
+}
+async function confirmReset() {
+  if (resetting.value) return;
+  resetting.value = true;
+  try { await resetPagesStorage(); }
+  catch { Snackbar.error({ content: text('pagesStorageError') }); resetting.value = false; }
+}
 </script>
 
 <template>
@@ -39,6 +58,7 @@ function openCache() { open.value = false; cache.value.open(); }
           <div class="settings-options"><button v-for="(palette, id) in themePresets" :key="id" v-ripple type="button" :aria-pressed="selectedTheme === id" @click="selectTheme(id)"><span class="theme-swatch" :style="{ background: palette.primary, color: palette['on-primary'] }"><MdiIcon v-if="selectedTheme === id" :path="mdiCheck" /></span>{{ labels[id] }}</button></div>
         </fieldset>
         <AppMenuItem v-if="!isAndroidApp" :icon="mdiDeleteOutline" :label="text('previewCache')" @click="openCache" />
+        <AppMenuItem v-if="isPagesApp" :icon="mdiDeleteOutline" :label="text('resetAll')" :description="text('resetAllSupporting')" @click="openReset" />
         <section class="settings-about" :aria-label="text('about')">
           <h3 class="settings-heading"><MdiIcon :path="mdiInformationOutline" />{{ text('about') }}</h3>
           <p class="about-links">
@@ -51,6 +71,14 @@ function openCache() { open.value = false; cache.value.open(); }
     </template>
   </var-menu>
   <PreviewCacheControl v-if="!isAndroidApp" ref="cache" hide-trigger />
+  <var-dialog v-if="isPagesApp" v-model:show="resetOpen" :title="text('resetAll')" :confirm-button="false" :cancel-button="false" :close-on-click-overlay="!resetting">
+    <p class="reset-note">{{ text('resetAllNote') }}</p>
+    <div class="reset-actions">
+      <var-button text :disabled="resetting" @click="resetOpen = false">{{ text('cancel') }}</var-button>
+      <var-button text :loading="backingUp" :disabled="resetting" @click="backup">{{ text('pagesBackup') }}</var-button>
+      <var-button type="danger" :loading="resetting" :disabled="backingUp" @click="confirmReset">{{ text('resetAllConfirm') }}</var-button>
+    </div>
+  </var-dialog>
 </template>
 
 <style scoped>
@@ -67,4 +95,6 @@ function openCache() { open.value = false; cache.value.open(); }
 .about-links { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 8px 4px; font-size: 13px; }
 .about-links > span { margin-right: auto; white-space: nowrap; }
 .about-links a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.reset-note { margin: 0 0 8px; line-height: 1.6; }
+.reset-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 </style>

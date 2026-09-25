@@ -22,17 +22,12 @@ const mode = ref('images');
 const filters = ref({});
 const items = ref([]);
 const prepared = ref([]);
+const batches = ref([]);
 const preparing = ref(false);
 const scrollRoot = ref(null);
 const sentinel = ref(null);
 const preview = ref(null);
 const previewOpen = ref(false);
-const visible = computed(() => prepared.value);
-const batches = computed(() => {
-  const result = [];
-  for (let index = 0; index < visible.value.length; index += 60) result.push(visible.value.slice(index, index + 60));
-  return result;
-});
 const counts = computed(() => countTagEpisodes(Object.keys(props.library.episodes ?? {}), props.tags.episodeTags, props.tags.categories));
 const candidates = computed(() => discoveryCandidates(props.library, props.tags, filters.value, mode.value));
 let observer;
@@ -48,7 +43,10 @@ async function prepareMore() {
   const end = start + 12;
   try {
     const batch = await prepareDiscoveryLayout(items.value.slice(start, end), { signal: controller.signal, cache: dimensionCache });
-    if (!controller.signal.aborted) prepared.value = [...prepared.value, ...batch];
+    if (!controller.signal.aborted) {
+      prepared.value = [...prepared.value, ...batch];
+      batches.value = [...batches.value, batch];
+    }
   } catch (error) {
     if (!controller.signal.aborted) throw error;
   } finally {
@@ -60,6 +58,7 @@ function refresh() {
   preparation?.abort();
   preparing.value = false;
   prepared.value = [];
+  batches.value = [];
   items.value = shuffleDiscovery(candidates.value);
   void prepareMore();
   nextTick(() => scrollRoot.value?.scrollTo({ top: 0 }));

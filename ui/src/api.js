@@ -10,6 +10,11 @@ export async function importPagesLibrary(files, progress) {
   return runtime.importPagesFiles(files, progress);
 }
 
+export async function resetPagesStorage() {
+  if (!isPagesApp) return;
+  return (await import('./pages/runtime.js')).resetPagesData();
+}
+
 export const isAndroidApp = Capacitor.getPlatform() === 'android';
 
 export function nativeAssetUrl(file) {

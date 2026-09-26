@@ -1,6 +1,6 @@
-import { matchArchiveFolderName, matchesRecognitionRule } from '../../../public/folder-recognition.js';
-import { datedFileIdentity, parseImageFilename, parseUndatedImageFilename, sortImageFileRecords } from '../../../src/validation/filename.js';
-import { applyVariantAssignments } from '../../../src/model/variant-assignments.js';
+import { matchArchiveFolderName, matchesRecognitionRule } from '../../../../public/folder-recognition.js';
+import { datedFileIdentity, parseImageFilename, parseUndatedImageFilename, sortImageFileRecords } from '../../../../src/validation/filename.js';
+import { applyVariantAssignments } from '../../../../src/model/variant-assignments.js';
 
 export function scanDirectoryRecords(files, previous, namespace) {
   const recognition = previous.recognition;

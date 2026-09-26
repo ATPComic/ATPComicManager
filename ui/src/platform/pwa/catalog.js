@@ -1,4 +1,4 @@
-import { createEmptyRecognitionState } from '../../../public/recognition-state.js';
+import { createEmptyRecognitionState } from '../../../../public/recognition-state.js';
 
 export const schema = `
 PRAGMA foreign_keys=ON;

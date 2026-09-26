@@ -1,4 +1,4 @@
-import { normalizeCategoryColor as normalizeColorValue } from '../../public/tag-state.js';
+import { normalizeCategoryColor as normalizeColorValue } from '../../../public/tag-state.js';
 
 export const TAG_CATEGORY_COLORS = [
   { id: 'purple', nameKey: 'colorPurple', accent: '#d0bcff', container: '#4f378b', onContainer: '#eaddff' },

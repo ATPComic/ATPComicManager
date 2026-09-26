@@ -21,7 +21,7 @@ test('touch selection and child expansion use separate buttons and avoid native 
   assert.match(tree, /class="touch-tag-select"/);
   assert.match(tree, /@click\.stop="toggle\(node.id\)"/);
   assert.match(tree, /@click\.stop="emit\('select', node.id\)"/);
-  const app = await readFile(new URL('../ui/src/App.vue', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../ui/src/app/App.vue', import.meta.url), 'utf8');
   assert.match(app, /:draggable="!touchUi && !touchGesture"/);
   const filter = await readFile(new URL('../ui/src/components/TagFilterControl.vue', import.meta.url), 'utf8');
   assert.match(filter, /var-popup v-if="touch"/);

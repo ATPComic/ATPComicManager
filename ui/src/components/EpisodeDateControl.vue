@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { mdiCalendarEditOutline, mdiCloseCircleOutline } from '../icons.js';
+import { mdiCalendarEditOutline, mdiCloseCircleOutline } from '../lib/icons.js';
 import { t } from '../../../public/i18n.js';
 import MdiIcon from './MdiIcon.vue';
 

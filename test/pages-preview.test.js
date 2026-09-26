@@ -25,7 +25,7 @@ test('Pages cache hits require no file access and denied reads report recoverabl
     URL, Response,
     indexedDB: { open() { const request = { result: db }; queueMicrotask(() => request.onsuccess()); return request; } }
   });
-  vm.runInContext(await readFile(new URL('../ui/src/pages/sw.js', import.meta.url), 'utf8'), context);
+  vm.runInContext(await readFile(new URL('../ui/src/platform/pwa/sw.js', import.meta.url), 'utf8'), context);
   const cached = await context.imageResponse(new URL('https://test/__image?key=cached&size=preview'));
   assert.equal(await cached.text(), 'preview');
   assert.equal(reads, 0);
@@ -61,7 +61,7 @@ test('Pages thumbnails use shared sizes, bounded concurrency, independent caches
       async convertToBlob() { return { type: 'image/webp' }; }
     }
   });
-  vm.runInContext(await readFile(new URL('../ui/src/pages/sw.js', import.meta.url), 'utf8'), context);
+  vm.runInContext(await readFile(new URL('../ui/src/platform/pwa/sw.js', import.meta.url), 'utf8'), context);
   assert.equal(decodes, 0);
   const db = { transaction() {
     const transaction = { objectStore() { return {

@@ -22,7 +22,7 @@ test('page entries share the brand theme and settings items share a style', asyn
     assert.match(source, /mountApp\(/);
     assert.doesNotMatch(source, /Themes.md3Dark/);
   }
-  const bootstrap = await readFile(new URL('../ui/src/bootstrap.js', import.meta.url), 'utf8');
+  const bootstrap = await readFile(new URL('../ui/src/app/bootstrap.js', import.meta.url), 'utf8');
   assert.match(bootstrap, /installTheme\(\)/);
   assert.doesNotMatch(bootstrap, /Themes.md3Dark/);
   const about = await readFile(new URL('../ui/src/components/SettingsMenu.vue', import.meta.url), 'utf8');

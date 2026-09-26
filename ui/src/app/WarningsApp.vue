@@ -1,13 +1,13 @@
 <script setup>
-import PageSkeleton from './components/PageSkeleton.vue';
+import PageSkeleton from '../components/PageSkeleton.vue';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { Snackbar } from '@varlet/ui';
-import { mdiAlertCircleOutline, mdiArrowRight, mdiChevronLeft, mdiRefresh } from './icons.js';
-import SettingsMenu from './components/SettingsMenu.vue';
-import MdiIcon from './components/MdiIcon.vue';
-import { requestJson } from './api.js';
-import { navigateToPage, returnFromPage } from './navigation.js';
-import { locale, t } from '../../public/i18n.js';
+import { mdiAlertCircleOutline, mdiArrowRight, mdiChevronLeft, mdiRefresh } from '../lib/icons.js';
+import SettingsMenu from '../components/SettingsMenu.vue';
+import MdiIcon from '../components/MdiIcon.vue';
+import { requestJson } from '../services/api.js';
+import { navigateToPage, returnFromPage } from '../lib/navigation.js';
+import { locale, t } from '../../../public/i18n.js';
 
 const state = reactive({ library: { warnings: [] }, selectedType: null, errorsOnly: false });
 const selectedLocale = ref(locale);

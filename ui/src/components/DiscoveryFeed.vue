@@ -2,11 +2,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { discoveryCandidates, discoverySignature, shuffleDiscovery } from '../../../public/discovery-model.js';
 import DiscoveryImage from './DiscoveryImage.vue';
-import { discoveryColumnCount, discoveryColumnGap, masonryColumns, prepareDiscoveryLayout } from '../discovery-layout.js';
+import { discoveryColumnCount, discoveryColumnGap, masonryColumns, prepareDiscoveryLayout } from '../lib/discovery-layout.js';
 import { countTagEpisodes } from '../../../public/collection-model.js';
 import { getImageUrl, getThumbnailUrl } from '../../../public/reader-model.js';
 import { t } from '../../../public/i18n.js';
-import { mdiChevronLeft, mdiRefresh } from '../icons.js';
+import { mdiChevronLeft, mdiRefresh } from '../lib/icons.js';
 import MdiIcon from './MdiIcon.vue';
 import TagFilterControl from './TagFilterControl.vue';
 

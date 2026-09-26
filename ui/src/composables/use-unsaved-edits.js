@@ -1,7 +1,7 @@
 import { onBeforeUnmount } from 'vue';
 import { Dialog } from '@varlet/ui';
-import { t } from '../../public/i18n.js';
-import { createUnsavedEdits } from '../../public/unsaved-edits.js';
+import { t } from '../../../public/i18n.js';
+import { createUnsavedEdits } from '../../../public/unsaved-edits.js';
 
 export function useUnsavedEdits(snapshot, save) {
   let leaving = false;

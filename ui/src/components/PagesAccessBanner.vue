@@ -1,5 +1,5 @@
 <script setup>
-import { directoryAccess, restoreDirectoryAccess } from '../pages/access.js';
+import { directoryAccess, restoreDirectoryAccess } from '../platform/pwa/access.js';
 import { pagesText } from '../../../public/locales/pages.js';
 async function restore() { try { await restoreDirectoryAccess(); } catch { /* Keep the recovery action available. */ } }
 </script>

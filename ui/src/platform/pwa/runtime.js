@@ -1,15 +1,15 @@
-import { t } from '../../../public/i18n.js';
-import { setReaderAssetUrlResolver } from '../../../public/reader-model.js';
-import { normalizeVariantAssignments } from '../../../public/variant-assignment-model.js';
-import { applyVariantAssignments } from '../../../src/model/variant-assignments.js';
-import { portableLibrary, assertPortableJson } from '../../../src/shared-export.js';
+import { t } from '../../../../public/i18n.js';
+import { setReaderAssetUrlResolver } from '../../../../public/reader-model.js';
+import { normalizeVariantAssignments } from '../../../../public/variant-assignment-model.js';
+import { applyVariantAssignments } from '../../../../src/model/variant-assignments.js';
+import { portableLibrary, assertPortableJson } from '../../../../src/shared-export.js';
 import { assetStore, clearAssetStore, pruneAssets, storeAssetEntries } from './assets.js';
 import { collectDirectoryFiles, emptyLibraryState, indexImportedFiles, matchImportedFile, readSharedCatalog } from './import-model.js';
 import { scanDirectoryRecords } from './scan-model.js';
 import { checkDirectoryAccess, reportDirectoryError } from './access.js';
-import { normalizeTagState } from '../../../public/tag-state.js';
-import { normalizeRecognitionState } from '../../../public/recognition-state.js';
-import { normalizeThemeRecord, normalizeThemeTitle } from '../../../public/theme-state.js';
+import { normalizeTagState } from '../../../../public/tag-state.js';
+import { normalizeRecognitionState } from '../../../../public/recognition-state.js';
+import { normalizeThemeRecord, normalizeThemeTitle } from '../../../../public/theme-state.js';
 
 let worker;
 let nextId = 0;

@@ -1,4 +1,4 @@
-import { mountApp } from './bootstrap.js';
-import TagsApp from './TagsApp.vue';
+import { mountApp } from './app/bootstrap.js';
+import TagsApp from './app/TagsApp.vue';
 
 mountApp(TagsApp);

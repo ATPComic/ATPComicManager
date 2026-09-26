@@ -1,10 +1,10 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Dialog, Snackbar } from '@varlet/ui';
-import { requestJson } from '../api.js';
+import { requestJson } from '../services/api.js';
 import { t } from '../../../public/i18n.js';
 import MdiIcon from './MdiIcon.vue';
-import { mdiDeleteOutline } from '../icons.js';
+import { mdiDeleteOutline } from '../lib/icons.js';
 defineProps({ hideTrigger: Boolean });
 defineExpose({ open });
 

@@ -1,8 +1,8 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { mdiChevronDown, mdiClose, mdiFilterVariant } from '../icons.js';
+import { mdiChevronDown, mdiClose, mdiFilterVariant } from '../lib/icons.js';
 import { t } from '../../../public/i18n.js';
-import { useTouchUi } from '../use-touch-ui.js';
+import { useTouchUi } from '../composables/use-touch-ui.js';
 import MdiIcon from './MdiIcon.vue';
 import TagFilterPanel from './TagFilterPanel.vue';
 const props = defineProps({

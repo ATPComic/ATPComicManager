@@ -1,5 +1,5 @@
 import { StyleProvider, Themes } from '@varlet/ui';
-import { themePresets, hsl } from '../../public/theme-palette.js';
+import { themePresets, hsl } from '../../../public/theme-palette.js';
 import { ref } from 'vue';
 
 const key = 'comic-manager.theme';

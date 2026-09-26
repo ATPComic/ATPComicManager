@@ -44,6 +44,7 @@ export function masonryColumns(items, columnCount, columnWidth, gap = 0) {
   return columns;
 }
 
+// eslint-disable-next-line no-restricted-globals -- same-origin thumbnail info request
 export async function prepareDiscoveryLayout(items, { signal, cache = new Map(), fetchInfo = fetch } = {}) {
   let cursor = 0;
   const result = new Array(items.length);

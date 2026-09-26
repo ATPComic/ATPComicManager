@@ -206,6 +206,7 @@ self.addEventListener('fetch', event => {
       key.search = '';
       if (key.pathname.endsWith('/')) key.pathname += 'index.html';
     }
+    // eslint-disable-next-line no-restricted-globals -- same-origin app-shell fallback
     return await cache.match(key.href) ?? fetch(event.request);
   })());
 });

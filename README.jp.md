@@ -100,11 +100,12 @@ npm run build
 - **ファイル書き込み**：[出力パス検証](src/utils/path.js)、[ハードリンク出力](src/apply/apply.js)、[回帰テスト](test/apply.test.js)。パストラバーサル、シンボリックリンク、既存ファイルの置換を確認します。
 - **外部入力**：[JSON インポート](src/stores/shared-import-store.js)、[入出力ルート](src/server.js)、[関連テスト](test/server-export.test.js)。信頼できない入力の検証、リソース消費、ファイルアクセス範囲を確認します。
 - **デスクトップ権限**：[Electron メインプロセス](electron/main.js)と[プリロード](electron/app-preload.cjs)。レンダラー分離、IPC、ページ遷移、外部リンク処理を確認します。
+- **アップロード防止（Web/PWA）**：pages ビルドは `Content-Security-Policy` の `connect-src 'self'` を強制し（[ビルドプラグイン](scripts/pages-plugin.mjs)、[ビルド検証](scripts/check-pages-build.mjs)）、ESLint は同一オリジン API 以外での `fetch`、`XMLHttpRequest`、`WebSocket`、`EventSource`、`RTCPeerConnection`、`importScripts`、`navigator.sendBeacon` を禁止します（[lint 設定](eslint.config.js)）。`npm run lint` と `dist-pages` のオフライン実行で確認できます。
 - **サプライチェーンとビルド**：`package-lock.json`、`package.json`、`.github/workflows/` の依存関係、インストールスクリプト、権限設定を確認します。
 
 ### GitHub Pages / PWA
 
-`npm run build:pages` の後に `npm run preview:pages` を実行すると、`/ATPComicManager/` で静的アプリを確認できます。ディレクトリアクセスに対応したブラウザーで共有 JSON を読み込み、画像フォルダーへのアクセスを許可してください。画像は直接読み取り、サムネイルは必要に応じて生成します。
+`npm run build:pages` の後に `npm run preview:pages` を実行すると、`/ATPComicManager/` で静的アプリを確認できます。ディレクトリアクセスに対応したブラウザーで共有 JSON を読み込み、画像フォルダーへのアクセスを許可してください。画像は直接読み取り、サムネイルは必要に応じて生成します。ビルドは同一オリジンのみの `Content-Security-Policy` を強制するため、Web 版がライブラリを送信することはありません。オフラインで使えば確認できます。
 
 公開にはリポジトリの **Settings → Pages → Source** を **GitHub Actions** に設定します。CI は Windows と Ubuntu で両方のビルドを検証し、すべて成功した後に `main` への push で `dist-pages` を公開します。`main` での手動実行でも公開でき、PR では検証のみ行います。
 

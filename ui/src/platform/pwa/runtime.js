@@ -216,6 +216,7 @@ async function handleRequest(url, options = {}) {
   const method = options.method ?? 'GET';
   const body = options.body ? JSON.parse(options.body) : {};
   if (url === '/api/cache/preview' && ['GET', 'DELETE'].includes(method)) {
+    // eslint-disable-next-line no-restricted-globals -- same-origin service-worker cache endpoint
     const response = await fetch(`${import.meta.env.BASE_URL}__preview-cache`, { method });
     if (!response.ok) throw new Error(t('pagesStorageError'));
     return response.json();

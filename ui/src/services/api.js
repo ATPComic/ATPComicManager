@@ -33,6 +33,7 @@ export async function requestJson(url, options = {}) {
     if (url === '/api/state' && (!options.method || options.method === 'GET')) return AtpLibrary.getState();
     throw new Error(`This operation is unavailable on Android: ${url}`);
   }
+  // eslint-disable-next-line no-restricted-globals -- same-origin local server API
   const response = await fetch(url, {
     headers: { 'content-type': 'application/json' },
     ...options

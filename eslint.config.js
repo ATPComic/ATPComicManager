@@ -32,6 +32,26 @@ export default [
     languageOptions: { globals: { ...globals.browser } }
   },
   {
+    // Upload-leak guard: browser code must not open network channels. The only
+    // allowed egress is the same-origin app surface, which must opt out at the
+    // call site with an explicit eslint-disable and a justification.
+    files: ['public/**/*.js', 'ui/**/*.{js,vue}'],
+    rules: {
+      'no-restricted-globals': ['error',
+        { name: 'fetch', message: 'Browser code may only use the same-origin app surface; add an explicit eslint-disable with a same-origin justification.' },
+        { name: 'XMLHttpRequest', message: 'Network egress is not allowed in browser code.' },
+        { name: 'WebSocket', message: 'Network egress is not allowed in browser code.' },
+        { name: 'EventSource', message: 'Network egress is not allowed in browser code.' },
+        { name: 'RTCPeerConnection', message: 'Peer connections can leak addresses and are not allowed.' },
+        { name: 'importScripts', message: 'Loading remote scripts is not allowed.' }
+      ],
+      'no-restricted-properties': ['error',
+        { object: 'navigator', property: 'sendBeacon', message: 'Beacon uploads are not allowed.' },
+        { object: 'navigator', property: 'share', message: 'Sharing leaves the app boundary and is not allowed.' }
+      ]
+    }
+  },
+  {
     files: ['ui/src/platform/pwa/sw.js'],
     languageOptions: {
       globals: {

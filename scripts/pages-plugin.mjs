@@ -11,9 +11,28 @@ function inlineShared(file) {
   return source;
 }
 
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "base-uri 'none'",
+  "object-src 'none'",
+  "form-action 'none'",
+  "connect-src 'self'",
+  "script-src 'self' 'wasm-unsafe-eval'",
+  "worker-src 'self' blob:",
+  "child-src 'self' blob:",
+  "img-src 'self' blob: data:",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:"
+].join('; ');
+
 export function pagesPlugin() {
   return {
     name: 'atp-pages',
+    transformIndexHtml(html) {
+      // GitHub Pages cannot send response headers, so the policy is enforced
+      // through a meta tag: no outbound connections except the same origin.
+      return html.replace('</head>', `<meta http-equiv="Content-Security-Policy" content="${CONTENT_SECURITY_POLICY}"></head>`);
+    },
     generateBundle(_options, bundle) {
       const base = '/ATPComicManager/';
       this.emitFile({ type: 'asset', fileName: 'missing-image.svg', source: readFileSync(new URL('../public/missing-image.svg', import.meta.url)) });

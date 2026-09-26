@@ -100,11 +100,12 @@ If you would like to contribute a security review, these components and trust bo
 - **Filesystem writes**: [output path validation](src/utils/path.js), [hard-link export](src/apply/apply.js), and [regression tests](test/apply.test.js). Check path traversal, symbolic links and replacement of existing files.
 - **External input**: [JSON import](src/stores/shared-import-store.js), [import/export routes](src/server.js), and [tests](test/server-export.test.js). Review validation, resource consumption and file-access scope for untrusted input.
 - **Desktop privileges**: [Electron main process](electron/main.js) and [preload interface](electron/app-preload.cjs). Review renderer isolation, IPC, navigation and external links.
+- **Upload guard (web/PWA)**: the pages build enforces a `Content-Security-Policy` with `connect-src 'self'` ([build plugin](scripts/pages-plugin.mjs), [build check](scripts/check-pages-build.mjs)), and ESLint rejects `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `RTCPeerConnection`, `importScripts` and `navigator.sendBeacon` outside the same-origin API surface ([lint config](eslint.config.js)). Verify with `npm run lint` and an offline run of `dist-pages`.
 - **Supply chain and builds**: inspect dependencies, installation scripts and permissions in `package-lock.json`, `package.json` and `.github/workflows/`.
 
 ### GitHub Pages / PWA
 
-Run `npm run build:pages`, then `npm run preview:pages` to test the static application at `/ATPComicManager/`. Choose an image folder in a browser supporting directory access. Configure recognition rules in **Library location**, or optionally import shared JSON to restore tags, collections and arrangements. Images are read directly, and thumbnails are generated and cached on demand.
+Run `npm run build:pages`, then `npm run preview:pages` to test the static application at `/ATPComicManager/`. Choose an image folder in a browser supporting directory access. Configure recognition rules in **Library location**, or optionally import shared JSON to restore tags, collections and arrangements. Images are read directly, and thumbnails are generated and cached on demand. The build enforces a same-origin-only `Content-Security-Policy`, so the web version cannot send your library anywhere; you can confirm by running it offline.
 
 While the application is visible, it checks for new files periodically and checks again when you return to it. Large folders use longer intervals to limit scanning overhead. **Rescan** refreshes the library manually. If folder access expires, **Restore access** requests permission again while preserving cached thumbnails.
 

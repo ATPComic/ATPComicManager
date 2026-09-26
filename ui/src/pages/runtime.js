@@ -214,7 +214,8 @@ async function handleRequest(url, options = {}) {
   if (url === '/api/state') return structuredClone({ ...state, initialized: true, runtime: { workspaceRoot: '' } });
   if (url === '/api/scan') {
     if (method !== 'POST') throw new Error(t('pagesUnavailable'));
-    return rescanDirectory();
+    const { library } = await rescanDirectory();
+    return { ok: true, library };
   }
   if (url === '/api/variants' && method === 'GET') return { variantAssignments: structuredClone(state.variantAssignments) };
   if (url === '/api/export/json') {
@@ -224,6 +225,7 @@ async function handleRequest(url, options = {}) {
     return { ok: true, export: structuredClone(exported) };
   }
   const next = structuredClone(state);
+  let result;
   if (url === '/api/variants' && method === 'PUT') {
     next.variantAssignments = normalizeVariantAssignments(body);
     applyVariantAssignments(next.library, next.variantAssignments, next.recognition.identityMarkers ?? []);
@@ -243,15 +245,22 @@ async function handleRequest(url, options = {}) {
     const theme = normalizeThemeRecord(body);
     const index = next.themes.findIndex(item => item.title === theme.title);
     if (index < 0) next.themes.push(theme); else next.themes[index] = theme;
+    result = { theme };
   } else if (url.startsWith('/api/themes/') && ['DELETE', 'PATCH'].includes(method)) {
     const title = decodeURIComponent(url.slice('/api/themes/'.length));
     if (method === 'DELETE') next.themes = next.themes.filter(theme => theme.title !== title);
-    else { const theme = next.themes.find(theme => theme.title === title); if (theme) theme.title = normalizeThemeTitle(body.title); }
+    else {
+      const theme = next.themes.find(theme => theme.title === title);
+      if (theme) { theme.title = normalizeThemeTitle(body.title); result = { theme }; }
+    }
   } else throw new Error(t('pagesUnavailable'));
   const saved = await persist(next);
-  if (url === '/api/recognition' && await checkDirectoryAccess()) {
-    await rescanDirectory();
-    return { ok: true, ...structuredClone(state) };
+  if (url === '/api/recognition' && method === 'PUT') {
+    // Match the server's narrow envelope: { ok, recognition, library }.
+    const library = (await checkDirectoryAccess()) ? (await rescanDirectory()).library : saved.library;
+    return { ok: true, recognition: saved.recognition, library };
   }
-  return { ok: true, ...saved };
+  if (url === '/api/variants' && method === 'PUT') return { ok: true, variantAssignments: saved.variantAssignments, library: saved.library };
+  if (url === '/api/tags' && method === 'PUT') return { ok: true, tags: saved.tags };
+  return { ok: true, ...(result ?? {}) };
 }

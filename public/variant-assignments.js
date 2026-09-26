@@ -6,8 +6,8 @@ import {
   isSpecialVariantName,
   normalizePeekRelations,
   normalizeVariantAssignments
-} from '../../public/variant-assignment-model.js';
-import { getVariantAssignmentToken, parseImageFilename, parseUndatedImageFilename, selectDatedSources, getAutomaticVariantCandidate, compareDatedSourcePriority } from '../validation/filename.js';
+} from './variant-assignment-model.js';
+import { getVariantAssignmentToken, parseImageFilename, parseUndatedImageFilename, selectDatedSources, getAutomaticVariantCandidate, compareDatedSourcePriority } from './filename.js';
 import { getEffectiveVariantSources } from './effective-variants.js';
 
 export function applyVariantAssignments(library, input, identityMarkers = []) {

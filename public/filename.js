@@ -1,4 +1,4 @@
-import { compareVariantNames, normalizeVariantName } from '../../public/variant-assignment-model.js';
+import { compareVariantNames, normalizeVariantName } from './variant-assignment-model.js';
 
 const IMAGE_EXTENSION_SOURCE = '(?:jpe?g|png|webp|gif|bmp|tiff?|avif)';
 const SOURCE_IMAGE_PATTERN = new RegExp(`^(\\d{8})(.*)\\.${IMAGE_EXTENSION_SOURCE}$`, 'i');

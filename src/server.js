@@ -10,15 +10,15 @@ import { loadThemes, saveTheme, deleteTheme, renameTheme, mergeSharedThemes } fr
 import { createPlan } from './planner/planner.js';
 import { applyPlan } from './apply/apply.js';
 import { loadTagState, mergeTagStates, saveTagState } from './stores/tag-store.js';
-import { getThumbnailPath, previewCacheInfo } from './stores/thumbnail-cache.js';
+import { getThumbnailPath, previewCacheInfo } from './thumbnails/thumbnail-cache.js';
 import { loadVariantAssignments, saveVariantAssignments, alignVariantTokens } from './stores/variant-store.js';
 import { normalizeVariantAssignments } from '../public/variant-assignment-model.js';
 import { loadRecognitionState, saveRecognitionState, mergeRecognitionStates } from './stores/recognition-store.js';
 import { loadSharedImport, normalizeSharedImport } from './stores/shared-import-store.js';
 import { initializeStorage } from './storage/initialize.js';
 import { withDatabase } from './storage/database.js';
-import { attachImageReferences, resolveImageReference } from './stores/image-reference.js';
-import { portableLibrary, assertPortableJson } from './shared-export.js';
+import { attachImageReferences, resolveImageReference } from './model/image-reference.js';
+import { portableLibrary, assertPortableJson } from '../public/shared-export.js';
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const publicRoot = path.join(currentDirectory, '..', 'dist');
@@ -63,7 +63,7 @@ function getImageContentType(filePath) {
 
 async function streamImage(request, response, filePath) {
   const stat = await fs.stat(filePath);
-  const etag = `W/\"${stat.size}-${Math.trunc(stat.mtimeMs)}\"`;
+  const etag = `W/"${stat.size}-${Math.trunc(stat.mtimeMs)}"`;
   if (request.headers['if-none-match'] === etag) {
     response.writeHead(304, { etag });
     response.end();

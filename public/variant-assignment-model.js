@@ -1,6 +1,7 @@
 export const DEFAULT_VARIANT_NAMES = ['a', 'b', 'c'];
 
 export function isValidEpisodeId(value) {
+  // eslint-disable-next-line no-control-regex -- control characters are intentionally rejected in ids.
   return typeof value === 'string' && (/^\d{8}$/.test(value) || /^folder:[^\u0000-\u001f]{1,505}$/.test(value));
 }
 

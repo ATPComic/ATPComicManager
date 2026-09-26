@@ -6,6 +6,8 @@ import { mergeTagMaps, normalizeTagMap } from './tag-state.js';
 
 export function normalizeThemeTitle(value) {
   const title = String(value ?? '').trim();
+  // Control characters are intentionally rejected in file-safe titles.
+  // eslint-disable-next-line no-control-regex
   if (!title || title === '.' || title === '..' || /[<>:"/\\|?*\u0000-\u001f]/.test(title) || /[. ]$/.test(title)) {
     throw new Error('Theme title contains invalid filename characters.');
   }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { applyVariantAssignments } from '../src/model/variant-assignments.js';
+import { applyVariantAssignments } from '../public/variant-assignments.js';
 
 function scan(names, assignments = {version: 3, episodes: {}}, markers = []) {
   const library = {episodes: {'20260101': {files: names.map(name => typeof name === 'string' ? {name} : name)}}, warnings: []};

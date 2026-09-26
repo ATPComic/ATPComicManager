@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { createImageQueue, thumbnailFingerprint, thumbnailProfile } from '../public/thumbnail-policy.js';
 import { imageDimensions } from '../public/image-dimensions.js';
+import { createAssetsDbOpener, PAGES_ASSETS_DB } from '../public/pages-assets-db.js';
 import sharp from 'sharp';
 
 test('Pages cache hits require no file access and denied reads report recoverable permissions', async () => {
@@ -21,7 +22,7 @@ test('Pages cache hits require no file access and denied reads report recoverabl
   } }; } }; } };
   const context = vm.createContext({
     self: { addEventListener() {}, clients: { async matchAll() { return [{ postMessage: message => messages.push(message) }]; } } },
-    __APP_FILES__: [], createImageQueue, thumbnailFingerprint, thumbnailProfile, imageDimensions,
+    __APP_FILES__: [], createImageQueue, thumbnailFingerprint, thumbnailProfile, imageDimensions, createAssetsDbOpener, PAGES_ASSETS_DB,
     URL, Response,
     indexedDB: { open() { const request = { result: db }; queueMicrotask(() => request.onsuccess()); return request; } }
   });
@@ -49,7 +50,7 @@ test('Pages thumbnails use shared sizes, bounded concurrency, independent caches
   const context = vm.createContext({
     self: { addEventListener() {} },
     __APP_FILES__: [],
-    createImageQueue, thumbnailFingerprint, thumbnailProfile, imageDimensions,
+    createImageQueue, thumbnailFingerprint, thumbnailProfile, imageDimensions, createAssetsDbOpener, PAGES_ASSETS_DB,
     async createImageBitmap() {
       decodes++;
       peak = Math.max(peak, ++active);

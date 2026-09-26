@@ -56,7 +56,7 @@ export function saveCatalog(db, state) {
     for (const [episode, assignments] of Object.entries(variants.episodes ?? {})) {
       if (!isUnsafeKey(episode) && state.library.episodes[episode]) insert('variants', [episode, JSON.stringify(assignments)]);
     }
-    const { episodes, ...variantMeta } = variants;
+    const { episodes: _episodes, ...variantMeta } = variants;
     insert('settings', ['variants', JSON.stringify(variantMeta)]);
     insert('settings', ['recognition', JSON.stringify(state.recognition)]);
     for (const [table, columns] of Object.entries(tables)) {

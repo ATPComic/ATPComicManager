@@ -1,5 +1,5 @@
-import { getImageFileAssignments, getImageFileMetadata, parseImageFilename } from './filename.js';
-import { getEffectiveVariantSources } from '../model/effective-variants.js';
+import { getImageFileAssignments, getImageFileMetadata, parseImageFilename } from '../../public/filename.js';
+import { getEffectiveVariantSources } from '../../public/effective-variants.js';
 import {
   compareVariantNames,
   getBaseVariantName,

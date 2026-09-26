@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { selectDatedSources, datedFileIdentity } from '../src/validation/filename.js';
-import { applyVariantAssignments } from '../src/model/variant-assignments.js';
+import { selectDatedSources, datedFileIdentity } from '../public/filename.js';
+import { applyVariantAssignments } from '../public/variant-assignments.js';
 import { mergeSharedLibrary } from '../src/model/library.js';
 import { scanWorkspace } from '../src/scanner/scanner.js';
 import { promises as fs } from 'node:fs';

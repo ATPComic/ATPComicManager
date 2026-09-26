@@ -2,8 +2,8 @@ import {
   compareVariantNames,
   getBaseVariantName,
   isSpecialVariantName
-} from '../../public/variant-assignment-model.js';
-import { getImageFileAssignments } from '../validation/filename.js';
+} from './variant-assignment-model.js';
+import { getImageFileAssignments } from './filename.js';
 
 export function getEffectiveVariantSources(episode) {
   const direct = [];

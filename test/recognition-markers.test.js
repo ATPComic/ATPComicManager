@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { parseImageFilename, parseUndatedImageFilename } from '../src/validation/filename.js';
+import { parseImageFilename, parseUndatedImageFilename } from '../public/filename.js';
 import { loadRecognitionState, saveRecognitionState, normalizeRecognitionState } from '../src/stores/recognition-store.js';
 import { LibraryDatabase } from '../src/storage/database.js';
 import { startServer } from '../src/server.js';

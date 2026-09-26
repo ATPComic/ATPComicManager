@@ -1,6 +1,6 @@
-import { portableLibrary, assertPortableJson } from '../../../../src/shared-export.js';
+import { portableLibrary, assertPortableJson } from '../../../../public/shared-export.js';
 import { isValidEpisodeId, normalizeVariantAssignments } from '../../../../public/variant-assignment-model.js';
-import { isImageFile, datedFileIdentity, compareDatedSourcePriority } from '../../../../src/validation/filename.js';
+import { isImageFile, datedFileIdentity, compareDatedSourcePriority } from '../../../../public/filename.js';
 import { matchArchiveFolderName } from '../../../../public/folder-recognition.js';
 import { normalizeTagState, createEmptyTagState } from '../../../../public/tag-state.js';
 import { normalizeRecognitionState, createEmptyRecognitionState } from '../../../../public/recognition-state.js';

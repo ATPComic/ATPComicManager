@@ -1,6 +1,6 @@
 const APP_CACHE = '__APP_CACHE__';
 const APP_FILES = __APP_FILES__;
-/* THUMBNAIL_POLICY */
+/* SHARED_MODULES */
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(APP_CACHE).then(cache => cache.addAll(APP_FILES)));
 });
@@ -13,15 +13,8 @@ self.addEventListener('activate', event => {
 const pendingPreviews = new Map();
 let previewEpoch = 0;
 const scheduleImage = createImageQueue(2);
-let assetDatabase;
-function openAssets() {
-  return assetDatabase ??= new Promise((resolve, reject) => {
-    const request = indexedDB.open('atp-comic-pages-assets-v1', 1);
-    request.onupgradeneeded = () => request.result.createObjectStore('assets');
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => { assetDatabase = null; reject(request.error); };
-  });
-}
+let assetOpener;
+const openAssets = () => (assetOpener ??= createAssetsDbOpener(indexedDB))();
 let lastFileError = 0;
 const validatedThumbnails = new Map();
 function validationTime(key, cached) {
@@ -37,7 +30,7 @@ async function readSource(db, key, item) {
   catch (error) {
     if (!['NotFoundError', 'NotReadableError', 'InvalidStateError'].includes(error.name)) throw error;
     const root = await new Promise((resolve, reject) => {
-      const request = db.transaction('assets').objectStore('assets').get('directory');
+      const request = db.transaction(PAGES_ASSETS_DB.store).objectStore(PAGES_ASSETS_DB.store).get('directory');
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
@@ -48,8 +41,8 @@ async function readSource(db, key, item) {
     const handle = await parent.getFileHandle(parts.at(-1));
     const source = await handle.getFile();
     await new Promise(resolve => {
-      const transaction = db.transaction('assets', 'readwrite');
-      const store = transaction.objectStore('assets');
+      const transaction = db.transaction(PAGES_ASSETS_DB.store, 'readwrite');
+      const store = transaction.objectStore(PAGES_ASSETS_DB.store);
       const request = store.get(key);
       request.onsuccess = () => { if (request.result) store.put({ ...request.result, handle }, key); };
       transaction.oncomplete = transaction.onerror = transaction.onabort = resolve;
@@ -87,12 +80,13 @@ function lazyPreview(db, key, item, source, size = 'small') {
       result = { blob, fingerprint, checkedAt: Date.now(), width: dimensions?.width || bitmap.width, height: dimensions?.height || bitmap.height };
     } finally { bitmap.close(); }
     await new Promise(resolve => {
-      const transaction = db.transaction('assets', 'readwrite');
-      const store = transaction.objectStore('assets');
+      const transaction = db.transaction(PAGES_ASSETS_DB.store, 'readwrite');
+      const store = transaction.objectStore(PAGES_ASSETS_DB.store);
       const request = store.get(key);
       request.onsuccess = () => {
         const current = request.result;
-        if (current?.handle && (size !== 'preview' || epoch === previewEpoch)) store.put({ ...current, thumbnails: { ...current.thumbnails, [size]: result } }, key);
+        if (!current?.handle || (size === 'preview' && epoch !== previewEpoch)) return;
+        store.put({ ...current, thumbnails: { ...current.thumbnails, [size]: result } }, key);
       };
       transaction.oncomplete = transaction.onabort = transaction.onerror = resolve;
     });
@@ -108,8 +102,8 @@ async function previewCacheResponse(clear) {
   const result = await new Promise((resolve, reject) => {
     let bytes = 0;
     let count = 0;
-    const transaction = db.transaction('assets', clear ? 'readwrite' : 'readonly');
-    const request = transaction.objectStore('assets').openCursor();
+    const transaction = db.transaction(PAGES_ASSETS_DB.store, clear ? 'readwrite' : 'readonly');
+    const request = transaction.objectStore(PAGES_ASSETS_DB.store).openCursor();
     request.onsuccess = () => {
       const cursor = request.result;
       if (!cursor) return;
@@ -126,60 +120,71 @@ async function previewCacheResponse(clear) {
 }
 async function imageResponse(url) {
   const db = await openAssets();
+  const key = url.searchParams.get('key');
+  const size = url.searchParams.get('size');
   let cached;
   try {
     const item = await new Promise((resolve, reject) => {
-      const request = db.transaction('assets').objectStore('assets').get(url.searchParams.get('key'));
+      const request = db.transaction(PAGES_ASSETS_DB.store).objectStore(PAGES_ASSETS_DB.store).get(key);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
-    const size = url.searchParams.get('size');
-    const validationKey = `${url.searchParams.get('key')}:${size}`;
+    const validationKey = `${key}:${size}`;
     cached = item?.thumbnails?.[size];
     if (size === 'info') {
       const info = item?.thumbnails?.small ?? item?.thumbnails?.preview ?? item?.dimensions;
       if (info?.width && info?.height) return Response.json({ width: info.width, height: info.height });
     }
-    if (cached?.blob && Date.now() - validationTime(validationKey, cached) < 300000) return new Response(cached.blob, { headers: { 'content-type': cached.blob.type, 'cache-control': 'no-store' } });
-    const source = await readSource(db, url.searchParams.get('key'), item);
+    if (cached?.blob && Date.now() - validationTime(validationKey, cached) < 300000) {
+      return new Response(cached.blob, { headers: { 'content-type': cached.blob.type, 'cache-control': 'no-store' } });
+    }
+    const source = await readSource(db, key, item);
     if (source && size === 'info') {
       const info = imageDimensions(await source.slice(0, 256 * 1024).arrayBuffer());
       if (info?.width > 0 && info?.height > 0) {
         await new Promise(resolve => {
-          const transaction = db.transaction('assets', 'readwrite');
-          const store = transaction.objectStore('assets');
-          const request = store.get(url.searchParams.get('key'));
-          request.onsuccess = () => { if (request.result) store.put({ ...request.result, dimensions: info }, url.searchParams.get('key')); };
+          const transaction = db.transaction(PAGES_ASSETS_DB.store, 'readwrite');
+          const store = transaction.objectStore(PAGES_ASSETS_DB.store);
+          const request = store.get(key);
+          request.onsuccess = () => { if (request.result) store.put({ ...request.result, dimensions: info }, key); };
           transaction.oncomplete = transaction.onerror = transaction.onabort = resolve;
         });
         return Response.json(info);
       }
     }
-    const preview = source && size !== 'original' ? await lazyPreview(db, url.searchParams.get('key'), item, source, size) : null;
-    if (preview) {
-      validationTime(validationKey, preview);
-      validatedThumbnails.set(validationKey, Date.now());
-    }
+    const preview = source && size !== 'original' ? await lazyPreview(db, key, item, source, size) : null;
+    if (preview) validationTime(validationKey, preview);
     if (size === 'info') return Response.json(preview ? { width: preview.width, height: preview.height } : { width: 2, height: 3 });
     const blob = size === 'original' ? source : preview?.blob;
-    return blob ? new Response(blob, { headers: { 'content-type': blob.type, 'cache-control': 'no-store' } })
-      : (await (await caches.open(APP_CACHE)).match(new URL('missing-image.svg', self.registration.scope))) ?? new Response(null, { status: 404 });
+    if (!blob) {
+      return (await (await caches.open(APP_CACHE)).match(new URL('missing-image.svg', self.registration.scope)))
+        ?? new Response(null, { status: 404 });
+    }
+    return new Response(blob, { headers: { 'content-type': blob.type, 'cache-control': 'no-store' } });
   } catch (error) {
     await reportFileError(error);
-    if (cached?.blob) return new Response(cached.blob, { headers: { 'content-type': cached.blob.type, 'cache-control': 'no-store' } });
-    return new Response(null, { status: ['NotAllowedError', 'SecurityError'].includes(error.name) ? 403 : 503, headers: { 'cache-control': 'no-store' } });
+    if (cached?.blob) {
+      return new Response(cached.blob, { headers: { 'content-type': cached.blob.type, 'cache-control': 'no-store' } });
+    }
+    const status = ['NotAllowedError', 'SecurityError'].includes(error.name) ? 403 : 503;
+    return new Response(null, { status, headers: { 'cache-control': 'no-store' } });
   }
 }
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || !url.href.startsWith(self.registration.scope)) return;
-  if (url.pathname === new URL('__preview-cache', self.registration.scope).pathname && ['GET', 'DELETE'].includes(event.request.method)) {
-    event.respondWith(previewCacheResponse(event.request.method === 'DELETE').catch(() => Response.json({ error: 'pagesStorageError' }, { status: 500 })));
+  const previewCachePath = new URL('__preview-cache', self.registration.scope).pathname;
+  if (url.pathname === previewCachePath && ['GET', 'DELETE'].includes(event.request.method)) {
+    const clear = event.request.method === 'DELETE';
+    const response = previewCacheResponse(clear).catch(() => Response.json({ error: 'pagesStorageError' }, { status: 500 }));
+    event.respondWith(response);
     return;
   }
   if (event.request.method !== 'GET') return;
   if (url.pathname === new URL('__image', self.registration.scope).pathname) {
-    event.respondWith(scheduleImage(() => imageResponse(url), { priority: url.searchParams.get('size') === 'preview' ? 0 : 1, signal: event.request.signal }).catch(() => new Response(null, { status: 503 })));
+    const priority = url.searchParams.get('size') === 'preview' ? 0 : 1;
+    const response = scheduleImage(() => imageResponse(url), { priority, signal: event.request.signal });
+    event.respondWith(response.catch(() => new Response(null, { status: 503 })));
     return;
   }
   event.respondWith((async () => {

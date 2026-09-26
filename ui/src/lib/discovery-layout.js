@@ -6,6 +6,7 @@ export function imageAspectRatio(width, height) {
 }
 
 export const DISCOVERY_MAX_COLUMNS = 5;
+
 export const DISCOVERY_COLUMN_GAP = 12;
 const MOBILE_COLUMN_GAP = 8;
 const MOBILE_MAX_WIDTH = 600;

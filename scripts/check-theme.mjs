@@ -5,10 +5,12 @@ export function luminance(hex) {
   const [r, g, b] = linear(hex);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
+
 export function contrast(a, b) {
   const values = [luminance(a), luminance(b)].sort((a, b) => b - a);
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
+
 export function oklch(hex) {
   const [r, g, b] = linear(hex);
   const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);

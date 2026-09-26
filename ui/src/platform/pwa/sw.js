@@ -1,22 +1,28 @@
 const APP_CACHE = '__APP_CACHE__';
 const APP_FILES = __APP_FILES__;
+
 /* SHARED_MODULES */
+
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(APP_CACHE).then(cache => cache.addAll(APP_FILES)));
 });
+
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     for (const name of await caches.keys()) if (name.startsWith('atp-pages-app-') && name !== APP_CACHE) await caches.delete(name);
     await self.clients.claim();
   })());
 });
+
 const pendingPreviews = new Map();
 let previewEpoch = 0;
 const scheduleImage = createImageQueue(2);
-let assetOpener;
-const openAssets = () => (assetOpener ??= createAssetsDbOpener(indexedDB))();
 let lastFileError = 0;
+let assetOpener;
 const validatedThumbnails = new Map();
+
+const openAssets = () => (assetOpener ??= createAssetsDbOpener(indexedDB))();
+
 function validationTime(key, cached) {
   if (!validatedThumbnails.has(key)) {
     if (validatedThumbnails.size >= 4000) validatedThumbnails.delete(validatedThumbnails.keys().next().value);
@@ -24,6 +30,7 @@ function validationTime(key, cached) {
   }
   return validatedThumbnails.get(key);
 }
+
 async function readSource(db, key, item) {
   if (!item?.handle) return null;
   try { return await item.handle.getFile(); }
@@ -50,11 +57,13 @@ async function readSource(db, key, item) {
     return source;
   }
 }
+
 async function reportFileError(error) {
   if (Date.now() - lastFileError < 3000) return;
   lastFileError = Date.now();
   for (const client of await self.clients.matchAll()) client.postMessage({ type: 'pages-file-error', name: error.name });
 }
+
 function lazyPreview(db, key, item, source, size = 'small') {
   const epoch = previewEpoch;
   size = size === 'preview' ? 'preview' : 'small';
@@ -96,6 +105,7 @@ function lazyPreview(db, key, item, source, size = 'small') {
   task.finally(() => pendingPreviews.delete(taskKey)).catch(() => {});
   return task;
 }
+
 async function previewCacheResponse(clear) {
   if (clear) previewEpoch++;
   const db = await openAssets();
@@ -118,6 +128,7 @@ async function previewCacheResponse(clear) {
   });
   return Response.json(result);
 }
+
 async function imageResponse(url) {
   const db = await openAssets();
   const key = url.searchParams.get('key');
@@ -170,6 +181,7 @@ async function imageResponse(url) {
     return new Response(null, { status, headers: { 'cache-control': 'no-store' } });
   }
 }
+
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || !url.href.startsWith(self.registration.scope)) return;

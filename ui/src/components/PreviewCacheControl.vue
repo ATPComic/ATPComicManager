@@ -26,7 +26,9 @@ async function refresh() {
   catch (cause) { error.value = cause.message; }
   finally { busy.value = false; }
 }
+
 async function open() { show.value = true; stats.value = null; await refresh(); }
+
 async function clear() {
   const action = await Dialog({ title: t('previewCacheClear'), message: t('previewCacheNote'), confirmButtonText: t('previewCacheClear'), cancelButtonText: t('cancel') });
   if (action !== 'confirm') return;

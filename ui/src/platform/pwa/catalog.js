@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, data TEXT NOT NULL);
 // A shared JSON file or a stray key must never reach Object.prototype through a
 // plain {} lookup, so reject prototype-shaped primary keys at the catalog sink.
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 const isUnsafeKey = value => UNSAFE_KEYS.has(String(value));
 
 export function saveCatalog(db, state) {

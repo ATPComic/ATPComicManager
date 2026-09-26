@@ -70,6 +70,7 @@ function refresh() {
   void prepareMore();
   nextTick(() => scrollRoot.value?.scrollTo({ top: 0 }));
 }
+
 function open(item) {
   if (item.readable) emit('read', item);
   else {
@@ -77,6 +78,7 @@ function open(item) {
     previewOpen.value = true;
   }
 }
+
 function more() { void prepareMore(); }
 watch(candidateSignature, refresh, { immediate: true });
 onMounted(() => {

@@ -29,7 +29,8 @@
     "android:release:unsigned": "npm run android:sync && cd android && gradlew.bat assembleRelease bundleRelease",
     "test": "node --test",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "release": "node scripts/release.mjs"
   },
   "dependencies": {
     "sharp": "^0.35.4"

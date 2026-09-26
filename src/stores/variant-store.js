@@ -1,8 +1,8 @@
-import { storageFor } from './storage/database.js';
-import { parseImageFilename, parseUndatedImageFilename } from './validation/filename.js';
+import { storageFor } from '../storage/database.js';
+import { parseImageFilename, parseUndatedImageFilename } from '../validation/filename.js';
 import {
   normalizeVariantAssignments
-} from '../public/variant-assignment-model.js';
+} from '../../public/variant-assignment-model.js';
 
 export async function loadVariantAssignments(databasePath) {
   return storageFor(databasePath).read('variants');

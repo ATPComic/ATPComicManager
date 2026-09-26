@@ -6,7 +6,7 @@ import { isImageFile, parseImageFilename, parseUndatedImageFilename, sortImageFi
 import { validateLibrary } from '../validation/validator.js';
 import { getFolderBaseName, matchArchiveFolderName, relativePosixPath, toPosixPath } from '../utils/path.js';
 import { discoverArchiveRoots } from './discovery.js';
-import { matchesRecognitionRule } from '../recognition-store.js';
+import { matchesRecognitionRule } from '../stores/recognition-store.js';
 
 
 async function readDirectoryEntries(rootPath) {

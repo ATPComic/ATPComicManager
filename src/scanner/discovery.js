@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { isImageFile, parseImageFilename } from '../validation/filename.js';
-import { matchesRecognitionRule } from '../recognition-store.js';
+import { matchesRecognitionRule } from '../stores/recognition-store.js';
 import { matchArchiveFolderName } from '../utils/path.js';
 
 const IGNORED_DIRECTORY_NAMES = new Set(['Reading', 'themes', 'node_modules', '.git', '.vscode']);

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
-import { createImageQueue, thumbnailProfile } from '../public/thumbnail-policy.js';
+import { createImageQueue, thumbnailProfile } from '../../public/thumbnail-policy.js';
 
 const pendingThumbnails = new Map();
 const scheduleConversion = createImageQueue(2);

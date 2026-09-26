@@ -1,6 +1,6 @@
-import { storageFor } from './storage/database.js';
+import { storageFor } from '../storage/database.js';
 import { normalizeRecognitionState } from './recognition-store.js';
-import { normalizeSharedThemes } from './themes/store.js';
+import { normalizeSharedThemes } from './theme-store.js';
 
 export function normalizeSharedImport(input) {
   const source = input?.export && typeof input.export === 'object' ? input.export : input;

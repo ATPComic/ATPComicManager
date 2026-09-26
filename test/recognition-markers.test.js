@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { parseImageFilename, parseUndatedImageFilename } from '../src/validation/filename.js';
-import { loadRecognitionState, saveRecognitionState, normalizeRecognitionState } from '../src/recognition-store.js';
+import { loadRecognitionState, saveRecognitionState, normalizeRecognitionState } from '../src/stores/recognition-store.js';
 import { LibraryDatabase } from '../src/storage/database.js';
 import { startServer } from '../src/server.js';
 import { resolveWorkspaceConfig } from '../src/utils/cli.js';

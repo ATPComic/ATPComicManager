@@ -1,5 +1,5 @@
-import { storageFor } from './storage/database.js';
-import { normalizeTagState } from '../public/tag-state.js';
+import { storageFor } from '../storage/database.js';
+import { normalizeTagState } from '../../public/tag-state.js';
 
 export {
   createEmptyTagState,
@@ -8,7 +8,7 @@ export {
   normalizeCategoryColor,
   normalizeTagMap,
   normalizeTagState
-} from '../public/tag-state.js';
+} from '../../public/tag-state.js';
 
 export async function loadTagState(databasePath) {
   return storageFor(databasePath).read('tags');

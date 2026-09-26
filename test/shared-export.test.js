@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { portableLibrary, assertPortableJson } from '../src/shared-export.js';
 import { mergeSharedLibrary } from '../src/model/library.js';
-import { normalizeSharedThemes } from '../src/themes/store.js';
+import { normalizeSharedThemes } from '../src/stores/theme-store.js';
 
 test('portable library uses explicit fields and drops absolute references on every OS', () => {
   for (const reference of ['C:\\Private\\a.png', 'D:/Private/a.png', '\\\\host\\share\\a.png', '/home/private/a.png', 'file:///home/private/a.png']) {

@@ -5,6 +5,7 @@ import { t } from '../../../public/i18n.js';
 import { settingsLabels } from '../../../public/locales/settings.js';
 import { themePresets } from '../../../public/theme-palette.js';
 import { version } from '../../../package.json';
+import { resolveAppVersion } from '../lib/app-version.js';
 import { appPath } from '../lib/navigation.js';
 import { isAndroidApp, isPagesApp, resetPagesStorage } from '../services/api.js';
 import { downloadLibraryBackup } from '../platform/pwa/backup.js';
@@ -23,13 +24,18 @@ const cache = ref(null);
 const resetOpen = ref(false);
 const resetting = ref(false);
 const backingUp = ref(false);
+const appVersion = ref(version);
+void resolveAppVersion(version).then((value) => { appVersion.value = value; });
 function changeLanguage(value) {
   if (value === props.modelValue) return;
   emit('update:modelValue', value);
   emit('change', value);
 }
+
 function openCache() { open.value = false; cache.value.open(); }
+
 function openReset() { open.value = false; resetOpen.value = true; }
+
 async function backup() {
   if (backingUp.value) return;
   backingUp.value = true;
@@ -37,6 +43,7 @@ async function backup() {
   catch { Snackbar.error({ content: text('exportFailed') }); }
   finally { backingUp.value = false; }
 }
+
 async function confirmReset() {
   if (resetting.value) return;
   resetting.value = true;
@@ -62,7 +69,7 @@ async function confirmReset() {
         <section class="settings-about" :aria-label="text('about')">
           <h3 class="settings-heading"><MdiIcon :path="mdiInformationOutline" />{{ text('about') }}</h3>
           <p class="about-links">
-            <span>ATP Comic <span class="about-version">v{{ version }}</span></span>
+            <span>ATP Comic <span class="about-version">v{{ appVersion }}</span></span>
             <a :href="appPath('/privacy/')" target="_blank" rel="noopener noreferrer" @click="open = false">{{ text('privacy') }}</a>
             <a href="https://github.com/ATPComic/ATPComicManager" target="_blank" rel="noopener noreferrer" @click="open = false">GitHub</a>
           </p>

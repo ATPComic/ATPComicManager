@@ -98,7 +98,7 @@ If you would like to contribute a security review, these components and trust bo
 
 - **Local HTTP API**: [routes and file access](src/server.js). The server binds to `127.0.0.1` by default and has no authentication. It is not intended for public deployment.
 - **Filesystem writes**: [output path validation](src/utils/path.js), [hard-link export](src/apply/apply.js), and [regression tests](test/apply.test.js). Check path traversal, symbolic links and replacement of existing files.
-- **External input**: [JSON import](src/shared-import-store.js), [import/export routes](src/server.js), and [tests](test/server-export.test.js). Review validation, resource consumption and file-access scope for untrusted input.
+- **External input**: [JSON import](src/stores/shared-import-store.js), [import/export routes](src/server.js), and [tests](test/server-export.test.js). Review validation, resource consumption and file-access scope for untrusted input.
 - **Desktop privileges**: [Electron main process](electron/main.js) and [preload interface](electron/app-preload.cjs). Review renderer isolation, IPC, navigation and external links.
 - **Supply chain and builds**: inspect dependencies, installation scripts and permissions in `package-lock.json`, `package.json` and `.github/workflows/`.
 

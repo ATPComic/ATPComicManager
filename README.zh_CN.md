@@ -98,7 +98,7 @@ npm run build
 
 - **本地 HTTP API**：[路由与文件访问](src/server.js)。服务默认监听 `127.0.0.1`，没有身份认证，不适合作为公开服务部署。
 - **文件系统写入**：[输出路径校验](src/utils/path.js)、[硬链接导出](src/apply/apply.js)及[回归测试](test/apply.test.js)。重点检查路径穿越、符号链接和已有文件的覆盖行为。
-- **外部输入**：[JSON 导入](src/shared-import-store.js)、[导入导出路由](src/server.js)及[相关测试](test/server-export.test.js)。检查不可信输入的校验、资源消耗和文件访问范围。
+- **外部输入**：[JSON 导入](src/stores/shared-import-store.js)、[导入导出路由](src/server.js)及[相关测试](test/server-export.test.js)。检查不可信输入的校验、资源消耗和文件访问范围。
 - **桌面权限边界**：[Electron 主进程](electron/main.js)与[预加载接口](electron/app-preload.cjs)。检查渲染进程隔离、IPC、页面导航和外部链接处理。
 - **供应链与构建**：检查 `package-lock.json`、`package.json` 和 `.github/workflows/` 中的依赖、安装脚本及权限配置。
 

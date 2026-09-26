@@ -98,7 +98,7 @@ npm run build
 
 - **ローカル HTTP API**：[ルーティングとファイルアクセス](src/server.js)。既定では `127.0.0.1` で待ち受け、認証機能はありません。公開サービスとしての運用は想定していません。
 - **ファイル書き込み**：[出力パス検証](src/utils/path.js)、[ハードリンク出力](src/apply/apply.js)、[回帰テスト](test/apply.test.js)。パストラバーサル、シンボリックリンク、既存ファイルの置換を確認します。
-- **外部入力**：[JSON インポート](src/shared-import-store.js)、[入出力ルート](src/server.js)、[関連テスト](test/server-export.test.js)。信頼できない入力の検証、リソース消費、ファイルアクセス範囲を確認します。
+- **外部入力**：[JSON インポート](src/stores/shared-import-store.js)、[入出力ルート](src/server.js)、[関連テスト](test/server-export.test.js)。信頼できない入力の検証、リソース消費、ファイルアクセス範囲を確認します。
 - **デスクトップ権限**：[Electron メインプロセス](electron/main.js)と[プリロード](electron/app-preload.cjs)。レンダラー分離、IPC、ページ遷移、外部リンク処理を確認します。
 - **サプライチェーンとビルド**：`package-lock.json`、`package.json`、`.github/workflows/` の依存関係、インストールスクリプト、権限設定を確認します。
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getVariantAssignmentToken, parseImageFilename, toReadingFileName } from '../src/validation/filename.js';
+import { getVariantAssignmentToken, parseImageFilename, toReadingFileName } from '../public/filename.js';
 
 test('toReadingFileName moves the variant letter after the page number', () => {
   assert.equal(toReadingFileName('20240105_a1.jpg'), '20240105_1a.jpg');

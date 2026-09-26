@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { portableLibrary, assertPortableJson } from '../src/shared-export.js';
+import { portableLibrary, assertPortableJson } from '../public/shared-export.js';
 import { mergeSharedLibrary } from '../src/model/library.js';
 import { normalizeSharedThemes } from '../src/stores/theme-store.js';
 

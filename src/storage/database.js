@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { parseImageFilename } from '../validation/filename.js';
+import { parseImageFilename } from '../../public/filename.js';
 
 const schema = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8');
 
@@ -181,7 +181,7 @@ export class LibraryDatabase {
     const byId = new Map(themes.map(r => [r.id,r]));
     for (const r of this.all('SELECT * FROM collection_episodes ORDER BY position')) byId.get(r.collection_id).episodes.push(r.episode_id);
     for (const r of this.all('SELECT * FROM collection_tags')) (byId.get(r.collection_id).tags[r.category_id] ??= []).push(r.tag_id);
-    return themes.map(({ id, ...theme }) => theme);
+    return themes.map(({ id: _id, ...theme }) => theme);
   }
   writeTheme(theme) {
     this.run('INSERT OR IGNORE INTO collections(title) VALUES (?)', theme.title);

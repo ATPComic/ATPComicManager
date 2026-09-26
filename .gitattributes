@@ -1,0 +1,11 @@
+# Normalize text files to LF in the repository, independent of the local
+# editor. Windows batch scripts keep CRLF so cmd.exe can run them.
+* text=auto
+*.bat text eol=crlf
+*.png binary
+*.ico binary
+*.webp binary
+*.sqlite binary
+*.sqlite-journal binary
+*.sqlite-wal binary
+*.sqlite-shm binary

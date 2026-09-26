@@ -35,6 +35,9 @@ function toggleNode(node) {
 }
 
 function removeNode(index) {
+  // The editor owns the shared tree passed by TagsApp and edits it in place;
+  // drag restructuring is reported separately through the restructure event.
+  // eslint-disable-next-line vue/no-mutating-props
   props.nodes.splice(index, 1);
 }
 

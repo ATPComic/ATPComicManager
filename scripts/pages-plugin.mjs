@@ -1,5 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import assert from 'node:assert/strict';
+
+// A service worker cannot import modules, so shared sources are inlined as
+// plain text. Fail loudly when a module still exports after stripping instead
+// of emitting a worker that only breaks at runtime.
+function inlineShared(file) {
+  const source = readFileSync(new URL(`../public/${file}`, import.meta.url), 'utf8').replace(/^export /gm, '');
+  assert.ok(!/\bexport\b/.test(source), `${file} has an export the service worker cannot inline`);
+  return source;
+}
 
 export function pagesPlugin() {
   return {
@@ -13,10 +23,8 @@ export function pagesPlugin() {
         'favicon.svg', 'favicon-32.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png',
         'missing-image.svg', 'manifest.webmanifest'
       ])].map(file => base + file);
-      const policy = readFileSync(new URL('../public/thumbnail-policy.js', import.meta.url), 'utf8').replace(/^export /gm, '');
-      const dimensions = readFileSync(new URL('../public/image-dimensions.js', import.meta.url), 'utf8').replace(/^export /gm, '');
-      const cache = readFileSync(new URL('../public/preview-cache.js', import.meta.url), 'utf8').replace(/^export /gm, '');
-      const template = readFileSync(new URL('../ui/src/platform/pwa/sw.js', import.meta.url), 'utf8').replace('/* THUMBNAIL_POLICY */', [policy, dimensions, cache].join('\n'));
+      const shared = ['pages-assets-db.js', 'thumbnail-policy.js', 'image-dimensions.js', 'preview-cache.js'].map(inlineShared).join('\n');
+      const template = readFileSync(new URL('../ui/src/platform/pwa/sw.js', import.meta.url), 'utf8').replace('/* SHARED_MODULES */', shared);
       const version = createHash('sha256').update(JSON.stringify(files)).update(template).digest('hex').slice(0, 12);
       const source = template
         .replace('__APP_CACHE__', `atp-pages-app-${version}`).replace('__APP_FILES__', JSON.stringify(files));

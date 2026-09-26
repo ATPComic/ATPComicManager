@@ -1,5 +1,5 @@
 import { storageFor } from '../storage/database.js';
-import { parseImageFilename, parseUndatedImageFilename } from '../validation/filename.js';
+import { parseImageFilename, parseUndatedImageFilename } from '../../public/filename.js';
 import {
   normalizeVariantAssignments
 } from '../../public/variant-assignment-model.js';

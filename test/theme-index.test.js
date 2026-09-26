@@ -150,8 +150,6 @@ test('indexes inherited special pages, their direct overrides, and episode peek 
     date: '20250401',
     title: '20250401',
     readingDate: '20250401',
-    title: '20250401',
-    readingDate: '20250401',
     variants: {
       b: [
         { page: 1, file: '001/20250401_1b.jpg' },

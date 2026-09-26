@@ -1,8 +1,8 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createEmptyLibrary, ensureEpisode, addLibraryWarning, mergeLibraryInto } from '../model/library.js';
-import { applyVariantAssignments } from '../model/variant-assignments.js';
-import { isImageFile, parseImageFilename, parseUndatedImageFilename, sortImageFileRecords } from '../validation/filename.js';
+import { applyVariantAssignments } from '../../public/variant-assignments.js';
+import { isImageFile, parseImageFilename, parseUndatedImageFilename, sortImageFileRecords } from '../../public/filename.js';
 import { validateLibrary } from '../validation/validator.js';
 import { getFolderBaseName, matchArchiveFolderName, relativePosixPath, toPosixPath } from '../utils/path.js';
 import { discoverArchiveRoots } from './discovery.js';

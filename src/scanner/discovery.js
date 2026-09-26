@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { isImageFile, parseImageFilename } from '../validation/filename.js';
+import { isImageFile, parseImageFilename } from '../../public/filename.js';
 import { matchesRecognitionRule } from '../stores/recognition-store.js';
 import { matchArchiveFolderName } from '../utils/path.js';
 

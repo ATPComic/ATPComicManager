@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { toReadingFileName } from '../validation/filename.js';
-import { getEffectiveVariantSources } from '../model/effective-variants.js';
+import { toReadingFileName } from '../../public/filename.js';
+import { getEffectiveVariantSources } from '../../public/effective-variants.js';
 import { compareVariantNames } from '../../public/variant-assignment-model.js';
 import { toPosixPath } from '../utils/path.js';
 

@@ -1,6 +1,6 @@
 import { storageFor } from '../storage/database.js';
 import { isValidEpisodeId } from '../../public/variant-assignment-model.js';
-import { datedFileIdentity } from '../validation/filename.js';
+import { datedFileIdentity } from '../../public/filename.js';
 
 export function createEmptyLibrary() {
   return {
@@ -10,7 +10,7 @@ export function createEmptyLibrary() {
   };
 }
 
-export function createEpisodeRecord({ episodeId, source, layout }) {
+export function createEpisodeRecord({ source, layout }) {
   return {
     source,
     layout,

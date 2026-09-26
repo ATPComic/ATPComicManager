@@ -1,8 +1,8 @@
 import { t } from '../../../../public/i18n.js';
 import { setReaderAssetUrlResolver } from '../../../../public/reader-model.js';
 import { normalizeVariantAssignments } from '../../../../public/variant-assignment-model.js';
-import { applyVariantAssignments } from '../../../../src/model/variant-assignments.js';
-import { portableLibrary, assertPortableJson } from '../../../../src/shared-export.js';
+import { applyVariantAssignments } from '../../../../public/variant-assignments.js';
+import { portableLibrary, assertPortableJson } from '../../../../public/shared-export.js';
 import { assetStore, clearAssetStore, pruneAssets, storeAssetEntries } from './assets.js';
 import { collectDirectoryFiles, emptyLibraryState, indexImportedFiles, matchImportedFile, readSharedCatalog } from './import-model.js';
 import { scanDirectoryRecords } from './scan-model.js';

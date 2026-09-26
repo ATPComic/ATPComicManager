@@ -926,10 +926,12 @@ onBeforeUnmount(() => {
       <var-card class="collection-pane" elevation="0">
         <header class="pane-heading">
           <h2>{{ t('collections') }}</h2>
-          <var-button text round :aria-label="pagesText('reverse')" :title="pagesText('reverse')" :aria-pressed="reverseCollections" @click="reverseCollections = !reverseCollections"><MdiIcon :path="mdiArrowDown" :style="{ transform: reverseCollections ? 'rotate(180deg)' : '' }" /></var-button>
-          <PagesLibraryControl v-if="isPagesApp" auto-open @imported="loadState()" @recognition="openRecognitionDialog" />
-          <span class="mobile-settings"><SettingsMenu v-model="selectedLocale" :options="localeOptions" @change="changeLocale" /></span>
-          <var-button v-if="isAndroidApp" class="android-library-change" round text :aria-label="t('chooseReadingDirectory')" :title="t('chooseReadingDirectory')" @click="chooseAndroidReadingDirectory"><MdiIcon :path="mdiFolderOpenOutline" /></var-button>
+          <div class="pane-heading-actions">
+            <var-button text round :aria-label="pagesText('reverse')" :title="pagesText('reverse')" :aria-pressed="reverseCollections" @click="reverseCollections = !reverseCollections"><MdiIcon :path="mdiArrowDown" :style="{ transform: reverseCollections ? 'rotate(180deg)' : '' }" /></var-button>
+            <span v-if="isPagesApp" class="pane-heading-library"><PagesLibraryControl @imported="loadState()" @recognition="openRecognitionDialog" /></span>
+            <span class="mobile-settings"><SettingsMenu v-model="selectedLocale" :options="localeOptions" @change="changeLocale" /></span>
+            <var-button v-if="isAndroidApp" class="android-library-change" round text :aria-label="t('chooseReadingDirectory')" :title="t('chooseReadingDirectory')" @click="chooseAndroidReadingDirectory"><MdiIcon :path="mdiFolderOpenOutline" /></var-button>
+          </div>
         </header>
         <div ref="collectionListRef" class="collection-list">
           <section v-if="isAndroidApp && !androidLibraryInitialized" class="android-library-prompt">
@@ -1004,15 +1006,17 @@ onBeforeUnmount(() => {
       <var-card class="episodes-pane" elevation="0">
         <header class="pane-heading episode-heading">
           <var-button class="mobile-pane-back" round text :aria-label="t('back')" @click="closeMobileCollection"><MdiIcon :path="mdiChevronLeft" /></var-button>
-          <div><span class="overline">{{ t('episodesOverline') }}</span><h2>{{ collectionTitle }}</h2></div>
+          <div class="episode-heading-title"><span class="overline">{{ t('episodesOverline') }}</span><h2>{{ collectionTitle }}</h2></div>
           <var-badge class="episode-total" :value="filteredEpisodeIds.length" :max-value="9999" type="info" />
-          <var-button text round :aria-label="pagesText('reverse')" :title="pagesText('reverse')" :aria-pressed="reverseEpisodes" @click="reverseEpisodes = !reverseEpisodes; dropIndex = null"><MdiIcon :path="mdiArrowDown" :style="{ transform: reverseEpisodes ? 'rotate(180deg)' : '' }" /></var-button>
-          <var-button-group v-if="activeTheme" mode="outline" size="small" :elevation="false" class="collection-actions">
-            <var-button outline :title="t('editCollectionTags')" :aria-label="t('editCollectionTags')" @click="openTagAssignment('collection', activeTheme.title)"><MdiIcon :path="mdiTagOutline" /></var-button>
-            <var-button outline :class="{ 'is-muted-action': !hasCollectionTags }" :title="hasCollectionTags ? t('applyCollectionTags') : t('collectionNoTags')" :aria-label="t('applyCollectionTags')" @click="applyCollectionTags"><MdiIcon :path="mdiTagArrowDownOutline" /></var-button>
-            <var-button outline :title="t('renameCollection')" :aria-label="t('renameCollection')" @click="openNameDialog('rename')"><MdiIcon :path="mdiPencilOutline" /></var-button>
-            <var-button outline class="danger-action" :title="t('deleteCollection')" :aria-label="t('deleteCollection')" @click="deleteTheme"><MdiIcon :path="mdiDeleteOutline" /></var-button>
-          </var-button-group>
+          <div class="episode-heading-actions">
+            <var-button text round :aria-label="pagesText('reverse')" :title="pagesText('reverse')" :aria-pressed="reverseEpisodes" @click="reverseEpisodes = !reverseEpisodes; dropIndex = null"><MdiIcon :path="mdiArrowDown" :style="{ transform: reverseEpisodes ? 'rotate(180deg)' : '' }" /></var-button>
+            <var-button-group v-if="activeTheme" mode="outline" size="small" :elevation="false" class="collection-actions">
+              <var-button outline :title="t('editCollectionTags')" :aria-label="t('editCollectionTags')" @click="openTagAssignment('collection', activeTheme.title)"><MdiIcon :path="mdiTagOutline" /></var-button>
+              <var-button outline :class="{ 'is-muted-action': !hasCollectionTags }" :title="hasCollectionTags ? t('applyCollectionTags') : t('collectionNoTags')" :aria-label="t('applyCollectionTags')" @click="applyCollectionTags"><MdiIcon :path="mdiTagArrowDownOutline" /></var-button>
+              <var-button outline :title="t('renameCollection')" :aria-label="t('renameCollection')" @click="openNameDialog('rename')"><MdiIcon :path="mdiPencilOutline" /></var-button>
+              <var-button outline class="danger-action" :title="t('deleteCollection')" :aria-label="t('deleteCollection')" @click="deleteTheme"><MdiIcon :path="mdiDeleteOutline" /></var-button>
+            </var-button-group>
+          </div>
         </header>
 
         <div v-if="activeTheme" class="collection-tag-row">

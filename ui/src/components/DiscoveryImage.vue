@@ -22,13 +22,11 @@ onBeforeUnmount(() => { observer?.disconnect(); window.removeEventListener('page
 
 <template>
   <span ref="frame" class="discovery-image" :style="{ aspectRatio }" :aria-busy="active && !ready && !failed">
-    <var-skeleton v-if="active && !ready && !failed" class="image-skeleton" :rows="0" card card-height="100%" />
     <img v-if="active" :key="retry" :src="retry && src.includes('/__image?') ? `${src}&retry=${retry}` : src" :alt="alt" :style="{ opacity: ready || failed ? 1 : 0 }" loading="lazy" decoding="async" @load="ready = true" @error="failed = true">
   </span>
 </template>
 
 <style scoped>
 .discovery-image { position: relative; display: block; width: 100%; background: var(--surface-high); overflow: hidden; }
-.discovery-image img, .image-skeleton { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; }
-.image-skeleton :deep(.var-skeleton__content) { height: 100%; }
+.discovery-image img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; transition: opacity 180ms ease; }
 </style>

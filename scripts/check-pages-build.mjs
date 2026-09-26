@@ -18,5 +18,5 @@ const manifest = JSON.parse(await readFile(resolve(root, 'manifest.webmanifest')
 assert.equal(manifest.start_url, base);
 assert.equal(manifest.scope, base);
 assert.ok((await readdir(resolve(root, 'assets'))).some(file => file.endsWith('.wasm')), 'SQLite WASM is missing');
-for (const file of ['sw.js', 'pwa-icon.png', 'missing-image.svg']) assert.ok((await stat(resolve(root, file))).size > 0);
+for (const file of ['sw.js', 'favicon.svg', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest', 'missing-image.svg']) assert.ok((await stat(resolve(root, file))).size > 0);
 console.log('Pages routes, asset paths, manifest and SQLite WASM verified.');

@@ -1,6 +1,7 @@
 import { fileURLToPath, URL } from 'node:url';
 import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vite';
+import { brandingPlugin } from './scripts/branding-plugin.mjs';
 import { pagesPlugin } from './scripts/pages-plugin.mjs';
 
 export default defineConfig(({ mode }) => ({
@@ -8,13 +9,17 @@ export default defineConfig(({ mode }) => ({
   worker: { format: 'es' },
   root: fileURLToPath(new URL('./ui', import.meta.url)),
   publicDir: false,
-  plugins: [mode === 'pages' && pagesPlugin(), vue({
-    template: {
-      compilerOptions: {
-        isCustomElement: (tag) => tag.startsWith('md-')
+  plugins: [
+    brandingPlugin({ base: mode === 'pages' ? '/ATPComicManager/' : '/' }),
+    mode === 'pages' && pagesPlugin(),
+    vue({
+      template: {
+        compilerOptions: {
+          isCustomElement: (tag) => tag.startsWith('md-')
+        }
       }
-    }
-  })],
+    })
+  ],
   build: {
     outDir: fileURLToPath(new URL(mode === 'pages' ? './dist-pages' : './dist', import.meta.url)),
     emptyOutDir: true,

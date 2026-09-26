@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { loadVariantAssignments, saveVariantAssignments } from '../src/variant-store.js';
+import { loadVariantAssignments, saveVariantAssignments } from '../src/stores/variant-store.js';
 
 test('variant assignment persistence keeps only date keys and trailing sequence tokens', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'comic-manager-variants-'));

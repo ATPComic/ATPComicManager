@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import sharp from 'sharp';
-import { createThumbnailWithSharp, getThumbnailPath, previewCacheInfo } from '../src/thumbnail-cache.js';
+import { createThumbnailWithSharp, getThumbnailPath, previewCacheInfo } from '../src/stores/thumbnail-cache.js';
 import { previewCacheEntry } from '../public/preview-cache.js';
 
 test('thumbnail cache generates once and reuses the derived image', async () => {

@@ -1,4 +1,4 @@
-import { getThumbnailUrl } from '../../public/reader-model.js';
+import { getThumbnailUrl } from '../../../public/reader-model.js';
 
 export function imageAspectRatio(width, height) {
   return Number(width) > 0 && Number(height) > 0 && Number.isFinite(Number(width) / Number(height))

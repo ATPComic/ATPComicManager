@@ -1,5 +1,5 @@
-import { requestJson } from '../api.js';
-import { downloadJsonFile } from '../download.js';
+import { requestJson } from '../../services/api.js';
+import { downloadJsonFile } from '../../lib/download.js';
 
 export async function downloadLibraryBackup() {
   const payload = await requestJson('/api/export/json', { method: 'POST', body: '{}' });

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { saveTheme } from '../src/themes/store.js';
+import { saveTheme } from '../src/stores/theme-store.js';
 
 test('source CLI scans and exports from an isolated generated workspace without JSON state or plan files', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'atp-cli-storage-'));

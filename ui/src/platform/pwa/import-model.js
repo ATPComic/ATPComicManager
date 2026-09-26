@@ -1,10 +1,10 @@
-import { portableLibrary, assertPortableJson } from '../../../src/shared-export.js';
-import { isValidEpisodeId, normalizeVariantAssignments } from '../../../public/variant-assignment-model.js';
-import { isImageFile, datedFileIdentity, compareDatedSourcePriority } from '../../../src/validation/filename.js';
-import { matchArchiveFolderName } from '../../../public/folder-recognition.js';
-import { normalizeTagState, createEmptyTagState } from '../../../public/tag-state.js';
-import { normalizeRecognitionState, createEmptyRecognitionState } from '../../../public/recognition-state.js';
-import { normalizeSharedThemes } from '../../../public/theme-state.js';
+import { portableLibrary, assertPortableJson } from '../../../../src/shared-export.js';
+import { isValidEpisodeId, normalizeVariantAssignments } from '../../../../public/variant-assignment-model.js';
+import { isImageFile, datedFileIdentity, compareDatedSourcePriority } from '../../../../src/validation/filename.js';
+import { matchArchiveFolderName } from '../../../../public/folder-recognition.js';
+import { normalizeTagState, createEmptyTagState } from '../../../../public/tag-state.js';
+import { normalizeRecognitionState, createEmptyRecognitionState } from '../../../../public/recognition-state.js';
+import { normalizeSharedThemes } from '../../../../public/theme-state.js';
 
 export async function collectDirectoryFiles(directory, progress = () => {}) {
   const files = [];

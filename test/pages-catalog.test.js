@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { schema, loadCatalog, saveCatalog } from '../ui/src/pages/catalog.js';
-import { collectDirectoryFiles, indexImportedFiles, matchImportedFile, readSharedCatalog } from '../ui/src/pages/import-model.js';
+import { schema, loadCatalog, saveCatalog } from '../ui/src/platform/pwa/catalog.js';
+import { collectDirectoryFiles, indexImportedFiles, matchImportedFile, readSharedCatalog } from '../ui/src/platform/pwa/import-model.js';
 
 function adapter(native) {
   return { exec(input) {

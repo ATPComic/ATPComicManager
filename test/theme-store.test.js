@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadThemes, renameTheme, saveTheme } from '../src/themes/store.js';
+import { loadThemes, renameTheme, saveTheme } from '../src/stores/theme-store.js';
 
 test('renames a theme without deleting its episode list', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'comic-manager-themes-'));

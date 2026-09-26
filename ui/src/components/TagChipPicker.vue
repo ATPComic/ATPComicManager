@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref } from 'vue';
 import TagCascadeMenu from './TagCascadeMenu.vue';
 import TouchTagTree from './TouchTagTree.vue';
-import { useTouchUi } from '../use-touch-ui.js';
+import { useTouchUi } from '../composables/use-touch-ui.js';
 const touch = useTouchUi();
 
 const HOVER_OPEN_DELAY = 200;

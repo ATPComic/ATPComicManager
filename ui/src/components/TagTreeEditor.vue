@@ -1,6 +1,6 @@
 <script setup>
 import { reactive, ref } from 'vue';
-import { mdiDeleteOutline, mdiDragVertical, mdiTagPlusOutline } from '../icons.js';
+import { mdiDeleteOutline, mdiDragVertical, mdiTagPlusOutline } from '../lib/icons.js';
 import { t } from '../../../public/i18n.js';
 import MdiIcon from './MdiIcon.vue';
 

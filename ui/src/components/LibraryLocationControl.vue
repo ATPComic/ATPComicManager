@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue';
-import { mdiAlertCircleOutline, mdiCheck, mdiFileImportOutline, mdiFolderCogOutline, mdiFolderRefreshOutline, mdiTuneVariant } from '../icons.js';
+import { mdiAlertCircleOutline, mdiCheck, mdiFileImportOutline, mdiFolderCogOutline, mdiFolderRefreshOutline, mdiTuneVariant } from '../lib/icons.js';
 import { t } from '../../../public/i18n.js';
 import MdiIcon from './MdiIcon.vue';
 

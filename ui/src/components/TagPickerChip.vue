@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { mdiCheck, mdiChevronDown, mdiChevronRight, mdiFileTreeOutline } from '../icons.js';
+import { mdiCheck, mdiChevronDown, mdiChevronRight, mdiFileTreeOutline } from '../lib/icons.js';
 import MdiIcon from './MdiIcon.vue';
 
 const props = defineProps({

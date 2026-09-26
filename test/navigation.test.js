@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { currentAppPath, libraryEpisodePath, returnPathFromHref, variantEpisodePath } from '../ui/src/navigation.js';
+import { currentAppPath, libraryEpisodePath, returnPathFromHref, variantEpisodePath } from '../ui/src/lib/navigation.js';
 
 test('variant links return to the originating gallery episode including encoded folder IDs', () => {
   for (const id of ['20260101', 'folder:Archive/Set One']) {

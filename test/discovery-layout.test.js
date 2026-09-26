@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { imageAspectRatio, prepareDiscoveryLayout, masonryColumns, masonryItemsHeight, discoveryColumnCount, discoveryColumnGap } from '../ui/src/discovery-layout.js';
+import { imageAspectRatio, prepareDiscoveryLayout, masonryColumns, masonryItemsHeight, discoveryColumnCount, discoveryColumnGap } from '../ui/src/lib/discovery-layout.js';
 import { setReaderAssetUrlResolver } from '../public/reader-model.js';
 
 test('layout resolves dimensions before rendering and caches stable image identities', async () => {

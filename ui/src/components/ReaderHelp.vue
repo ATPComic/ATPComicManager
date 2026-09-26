@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue';
-import { mdiHelpCircleOutline } from '../icons.js';
+import { mdiHelpCircleOutline } from '../lib/icons.js';
 import MdiIcon from './MdiIcon.vue';
 
 defineProps({

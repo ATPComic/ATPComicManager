@@ -7,7 +7,7 @@ import { scanWorkspace } from '../src/scanner/scanner.js';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { alignVariantTokens } from '../src/variant-store.js';
+import { alignVariantTokens } from '../src/stores/variant-store.js';
 import { storageFor } from '../src/storage/database.js';
 import { startServer } from '../src/server.js';
 import { resolveWorkspaceConfig } from '../src/utils/cli.js';

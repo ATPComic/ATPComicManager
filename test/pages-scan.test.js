@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scanDirectoryRecords } from '../ui/src/pages/scan-model.js';
-import { collectDirectoryFiles, emptyLibraryState, indexImportedFiles, matchImportedFile, readSharedCatalog } from '../ui/src/pages/import-model.js';
+import { scanDirectoryRecords } from '../ui/src/platform/pwa/scan-model.js';
+import { collectDirectoryFiles, emptyLibraryState, indexImportedFiles, matchImportedFile, readSharedCatalog } from '../ui/src/platform/pwa/import-model.js';
 
 const initial = () => ({ library: { episodes: {} }, recognition: { rules: [], identityMarkers: [], episodeDates: {} }, variantAssignments: { version: 3, episodes: {} } });
 const file = path => ({ name: path.split('/').at(-1), webkitRelativePath: `Root/${path}` });

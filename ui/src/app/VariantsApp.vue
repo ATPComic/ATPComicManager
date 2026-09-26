@@ -1,16 +1,16 @@
 <script setup>
-import PageSkeleton from './components/PageSkeleton.vue';
+import PageSkeleton from '../components/PageSkeleton.vue';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { Dialog, Snackbar } from '@varlet/ui';
-import { mdiArrowRight, mdiChevronLeft, mdiContentSaveOutline, mdiDeleteOutline, mdiDragVertical, mdiImageOutline, mdiPencilOutline, mdiPlus, mdiRefresh, mdiRestore, mdiTuneVariant } from './icons.js';
-import MdiIcon from './components/MdiIcon.vue';
-import SettingsMenu from './components/SettingsMenu.vue';
-import { isPagesApp, requestJson } from './api.js';
-import { cloneData } from './clone-data.js';
-import { useUnsavedEdits } from './use-unsaved-edits.js';
-import { libraryEpisodePath, returnFromPage, returnPathFromHref } from './navigation.js';
-import { locale, t } from '../../public/i18n.js';
-import { getThumbnailUrl } from '../../public/reader-model.js';
+import { mdiArrowRight, mdiChevronLeft, mdiContentSaveOutline, mdiDeleteOutline, mdiDragVertical, mdiImageOutline, mdiPencilOutline, mdiPlus, mdiRefresh, mdiRestore, mdiTuneVariant } from '../lib/icons.js';
+import MdiIcon from '../components/MdiIcon.vue';
+import SettingsMenu from '../components/SettingsMenu.vue';
+import { isPagesApp, requestJson } from '../services/api.js';
+import { cloneData } from '../lib/clone-data.js';
+import { useUnsavedEdits } from '../composables/use-unsaved-edits.js';
+import { libraryEpisodePath, returnFromPage, returnPathFromHref } from '../lib/navigation.js';
+import { locale, t } from '../../../public/i18n.js';
+import { getThumbnailUrl } from '../../../public/reader-model.js';
 import {
   DEFAULT_VARIANT_NAMES,
   addVariant,
@@ -27,7 +27,7 @@ import {
   removeVariant,
   removeVariantToken,
   setVariantPageMapping
-} from '../../public/variant-assignment-model.js';
+} from '../../../public/variant-assignment-model.js';
 
 const state = reactive({
   library: { episodes: {}, warnings: [] },

@@ -7,12 +7,12 @@ import {
   mdiFileTreeOutline,
   mdiTagMultipleOutline,
   mdiTuneVariant
-} from '../icons.js';
+} from '../lib/icons.js';
 import { t } from '../../../public/i18n.js';
 import SettingsMenu from './SettingsMenu.vue';
 import LibraryLocationControl from './LibraryLocationControl.vue';
 import MdiIcon from './MdiIcon.vue';
-import { isPagesApp } from '../api.js';
+import { isPagesApp } from '../services/api.js';
 import PagesLibraryControl from './PagesLibraryControl.vue';
 import AppMenuItem from './AppMenuItem.vue';
 

@@ -1,11 +1,11 @@
 <script setup>
-import PageSkeleton from './components/PageSkeleton.vue';
-import { useTouchUi } from './use-touch-ui.js';
-import { scrollHeaderState } from '../../public/scroll-header.js';
-import DiscoveryFeed from './components/DiscoveryFeed.vue';
-import PagesLibraryControl from './components/PagesLibraryControl.vue';
-import PagesAccessBanner from './components/PagesAccessBanner.vue';
-import { pagesText } from '../../public/locales/pages.js';
+import PageSkeleton from '../components/PageSkeleton.vue';
+import { useTouchUi } from '../composables/use-touch-ui.js';
+import { scrollHeaderState } from '../../../public/scroll-header.js';
+import DiscoveryFeed from '../components/DiscoveryFeed.vue';
+import PagesLibraryControl from '../components/PagesLibraryControl.vue';
+import PagesAccessBanner from '../components/PagesAccessBanner.vue';
+import { pagesText } from '../../../public/locales/pages.js';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { Dialog, Snackbar } from '@varlet/ui';
 import {
@@ -35,32 +35,32 @@ import {
   mdiWindowClose,
   mdiWindowMinimize,
   mdiWindowRestore,
-} from './icons.js';
-import AppTopBar from './components/AppTopBar.vue';
-import MdiIcon from './components/MdiIcon.vue';
-import ReaderHelp from './components/ReaderHelp.vue';
-import ReaderSlider from './components/ReaderSlider.vue';
-import ReaderVariants from './components/ReaderVariants.vue';
-import TagAssignmentPicker from './components/TagChipPicker.vue';
-import TagDisplayChip from './components/TagDisplayChip.vue';
-import TagFilterControl from './components/TagFilterControl.vue';
-import DateFilterControl from './components/DateFilterControl.vue';
-import EpisodeDateControl from './components/EpisodeDateControl.vue';
-import { chooseAndroidLibrary, isAndroidApp, isPagesApp, nativeAssetUrl, requestJson } from './api.js';
-import SettingsMenu from './components/SettingsMenu.vue';
-import { downloadJsonFile } from './download.js';
-import { cloneData } from './clone-data.js';
-import { navigateToPage, returnPathFromHref, variantEpisodePath } from './navigation.js';
-import { tagCategoryStyle as getTagCategoryStyle } from './tag-colors.js';
-import { EPISODE_DRAG_TYPE, draggedEpisodeId, compareEpisodesByDate, countTagEpisodes, matchesDateFilter, matchesTagFilter, moveItemToSlot } from '../../public/collection-model.js';
-import { locale, t } from '../../public/i18n.js';
-import { ComicReader } from '../../public/reader.js';
-import { getThumbnailUrl, setReaderAssetUrlResolver } from '../../public/reader-model.js';
-import { readInitialViewState } from '../../public/view-state.js';
-import { flattenTagDefinitions, getOrderedTagEntries } from '../../public/tag-model.js';
-import { createEmptyTagState, mergeTagMaps } from '../../public/tag-state.js';
-import { createEmptyRecognitionState } from '../../public/recognition-state.js';
-import { getVirtualWindow } from '../../public/virtual-list.js';
+} from '../lib/icons.js';
+import AppTopBar from '../components/AppTopBar.vue';
+import MdiIcon from '../components/MdiIcon.vue';
+import ReaderHelp from '../components/ReaderHelp.vue';
+import ReaderSlider from '../components/ReaderSlider.vue';
+import ReaderVariants from '../components/ReaderVariants.vue';
+import TagAssignmentPicker from '../components/TagChipPicker.vue';
+import TagDisplayChip from '../components/TagDisplayChip.vue';
+import TagFilterControl from '../components/TagFilterControl.vue';
+import DateFilterControl from '../components/DateFilterControl.vue';
+import EpisodeDateControl from '../components/EpisodeDateControl.vue';
+import { chooseAndroidLibrary, isAndroidApp, isPagesApp, nativeAssetUrl, requestJson } from '../services/api.js';
+import SettingsMenu from '../components/SettingsMenu.vue';
+import { downloadJsonFile } from '../lib/download.js';
+import { cloneData } from '../lib/clone-data.js';
+import { navigateToPage, returnPathFromHref, variantEpisodePath } from '../lib/navigation.js';
+import { tagCategoryStyle as getTagCategoryStyle } from '../lib/tag-colors.js';
+import { EPISODE_DRAG_TYPE, draggedEpisodeId, compareEpisodesByDate, countTagEpisodes, matchesDateFilter, matchesTagFilter, moveItemToSlot } from '../../../public/collection-model.js';
+import { locale, t } from '../../../public/i18n.js';
+import { ComicReader } from '../../../public/reader.js';
+import { getThumbnailUrl, setReaderAssetUrlResolver } from '../../../public/reader-model.js';
+import { readInitialViewState } from '../../../public/view-state.js';
+import { flattenTagDefinitions, getOrderedTagEntries } from '../../../public/tag-model.js';
+import { createEmptyTagState, mergeTagMaps } from '../../../public/tag-state.js';
+import { createEmptyRecognitionState } from '../../../public/recognition-state.js';
+import { getVirtualWindow } from '../../../public/virtual-list.js';
 
 const READER_SETTINGS_KEY = 'comic-manager.reader-settings';
 const layoutLabel = layout => t(({ 'month-flat': 'layoutMonthly', folder: 'layoutDaily', 'rule-folder': 'layoutCustom' })[layout] ?? 'layoutUnknown');

@@ -1,5 +1,5 @@
 <script setup>
-import PageSkeleton from './components/PageSkeleton.vue';
+import PageSkeleton from '../components/PageSkeleton.vue';
 import { onMounted, reactive, ref } from 'vue';
 import { Snackbar } from '@varlet/ui';
 import {
@@ -12,23 +12,23 @@ import {
   mdiPlus,
   mdiTagPlusOutline,
   mdiTagMultipleOutline
-} from './icons.js';
-import SettingsMenu from './components/SettingsMenu.vue';
-import MdiIcon from './components/MdiIcon.vue';
-import TagTreeEditor from './components/TagTreeEditor.vue';
-import { requestJson } from './api.js';
-import { cloneData } from './clone-data.js';
-import { returnFromPage } from './navigation.js';
-import { useUnsavedEdits } from './use-unsaved-edits.js';
+} from '../lib/icons.js';
+import SettingsMenu from '../components/SettingsMenu.vue';
+import MdiIcon from '../components/MdiIcon.vue';
+import TagTreeEditor from '../components/TagTreeEditor.vue';
+import { requestJson } from '../services/api.js';
+import { cloneData } from '../lib/clone-data.js';
+import { returnFromPage } from '../lib/navigation.js';
+import { useUnsavedEdits } from '../composables/use-unsaved-edits.js';
 import {
   TAG_CATEGORY_COLORS,
   normalizeCategoryColor,
   tagCategoryColor,
   tagCategoryStyle
-} from './tag-colors.js';
-import { locale, t } from '../../public/i18n.js';
-import { migrateTagMap, normalizeTagDefinition, relocateTagDefinition } from '../../public/tag-model.js';
-import { createEmptyTagState } from '../../public/tag-state.js';
+} from '../lib/tag-colors.js';
+import { locale, t } from '../../../public/i18n.js';
+import { migrateTagMap, normalizeTagDefinition, relocateTagDefinition } from '../../../public/tag-model.js';
+import { createEmptyTagState } from '../../../public/tag-state.js';
 
 const state = reactive({
   tags: createEmptyTagState(),

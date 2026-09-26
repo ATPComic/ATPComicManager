@@ -6,7 +6,7 @@ import { isImageFile, parseImageFilename, parseUndatedImageFilename, sortImageFi
 import { validateLibrary } from '../validation/validator.js';
 import { getFolderBaseName, matchArchiveFolderName, relativePosixPath, toPosixPath } from '../utils/path.js';
 import { discoverArchiveRoots } from './discovery.js';
-import { matchesRecognitionRule } from '../recognition-store.js';
+import { matchesRecognitionRule } from '../stores/recognition-store.js';
 
 
 async function readDirectoryEntries(rootPath) {
@@ -73,44 +73,49 @@ async function scanUndatedFolder(library, archiveRoot, workspaceRoot, folderEntr
   }
 }
 
-async function scanEpisodeFolder(library, archiveRoot, folderEntry, identityMarkers) {
+function reportDuplicatePages(library, fileByKey) {
+  for (const [key, paths] of fileByKey.entries()) {
+    if (paths.length <= 1) continue;
+    const [episodeId, variant, pageNumber] = key.split(':');
+    addLibraryWarning(library, {
+      type: 'duplicate-page-number',
+      severity: 'warning',
+      episodeId,
+      path: paths[0],
+      relatedPaths: paths.slice(1),
+      message: `Duplicate page number ${variant}${pageNumber}`
+    });
+  }
+}
+
+// Dated folders and month folders share one file-walk; only the episode identity
+// used for warnings/registration and the date-mismatch rule differ.
+async function scanDatedFolder(library, archiveRoot, folderEntry, { layout, identityMarkers, invalidEpisodeId, mismatchFolder, fileEpisodeId, isMismatch, mismatchEpisodeId }) {
   const folderPath = path.join(archiveRoot, folderEntry.name);
-  const baseEpisodeId = getFolderBaseName(folderEntry.name);
   const files = await collectFiles(folderPath);
-
   const fileByKey = new Map();
-  for (const fileName of files) {
-    if (!isImageFile(fileName)) {
-      addLibraryWarning(library, {
-        type: 'invalid-filename',
-        severity: 'warning',
-        episodeId: baseEpisodeId,
-        path: relativePosixPath(archiveRoot, path.join(folderPath, fileName)),
-        message: `Invalid filename: ${fileName}`
-      });
-      continue;
-    }
 
-    const parsed = parseImageFilename(fileName, identityMarkers);
+  for (const fileName of files) {
     const relativePath = relativePosixPath(archiveRoot, path.join(folderPath, fileName));
+    const parsed = isImageFile(fileName) ? parseImageFilename(fileName, identityMarkers) : null;
     if (!parsed) {
       addLibraryWarning(library, {
         type: 'invalid-filename',
         severity: 'warning',
-        episodeId: baseEpisodeId,
+        episodeId: invalidEpisodeId,
         path: relativePath,
         message: `Invalid filename: ${fileName}`
       });
       continue;
     }
 
-    if (parsed.episodeId !== baseEpisodeId) {
+    if (isMismatch(parsed)) {
       addLibraryWarning(library, {
         type: 'folder-file-date-mismatch',
         severity: 'error',
-        episodeId: baseEpisodeId,
+        episodeId: mismatchEpisodeId(parsed),
         path: relativePath,
-        message: `Folder ${baseEpisodeId} contains ${fileName}`
+        message: `Folder ${mismatchFolder} contains ${fileName}`
       });
     }
 
@@ -121,98 +126,41 @@ async function scanEpisodeFolder(library, archiveRoot, folderEntry, identityMark
       fileByKey.set(key, existing);
     }
 
-    registerFile(library, baseEpisodeId, {
+    registerFile(library, fileEpisodeId(parsed), {
       name: fileName,
       relativePath,
       absolutePath: path.join(folderPath, fileName),
       source: folderPath
-    }, 'folder', folderPath, parsed);
+    }, layout, folderPath, parsed);
   }
 
-  for (const [key, paths] of fileByKey.entries()) {
-    if (paths.length > 1) {
-      const [episodeId, variant, pageNumber] = key.split(':');
-      addLibraryWarning(library, {
-        type: 'duplicate-page-number',
-        severity: 'warning',
-        episodeId,
-        path: paths[0],
-        relatedPaths: paths.slice(1),
-        message: `Duplicate page number ${variant}${pageNumber}`
-      });
-    }
-  }
+  reportDuplicatePages(library, fileByKey);
+}
+
+async function scanEpisodeFolder(library, archiveRoot, folderEntry, identityMarkers) {
+  const baseEpisodeId = getFolderBaseName(folderEntry.name);
+  await scanDatedFolder(library, archiveRoot, folderEntry, {
+    layout: 'folder',
+    identityMarkers,
+    invalidEpisodeId: baseEpisodeId,
+    mismatchFolder: baseEpisodeId,
+    fileEpisodeId: () => baseEpisodeId,
+    isMismatch: parsed => parsed.episodeId !== baseEpisodeId,
+    mismatchEpisodeId: () => baseEpisodeId
+  });
 }
 
 async function scanMonthFolder(library, archiveRoot, folderEntry, identityMarkers) {
   const month = matchArchiveFolderName(folderEntry.name).month;
-  const folderPath = path.join(archiveRoot, folderEntry.name);
-  const files = await collectFiles(folderPath);
-  const fileByKey = new Map();
-
-  for (const fileName of files) {
-    if (!isImageFile(fileName)) {
-      addLibraryWarning(library, {
-        type: 'invalid-filename',
-        severity: 'warning',
-        episodeId: folderEntry.name,
-        path: relativePosixPath(archiveRoot, path.join(folderPath, fileName)),
-        message: `Invalid filename: ${fileName}`
-      });
-      continue;
-    }
-
-    const parsed = parseImageFilename(fileName, identityMarkers);
-    const relativePath = relativePosixPath(archiveRoot, path.join(folderPath, fileName));
-    if (!parsed) {
-      addLibraryWarning(library, {
-        type: 'invalid-filename',
-        severity: 'warning',
-        episodeId: folderEntry.name,
-        path: relativePath,
-        message: `Invalid filename: ${fileName}`
-      });
-      continue;
-    }
-
-    if (!parsed.episodeId.startsWith(month)) {
-      addLibraryWarning(library, {
-        type: 'folder-file-date-mismatch',
-        severity: 'error',
-        episodeId: parsed.episodeId,
-        path: relativePath,
-        message: `Folder ${folderEntry.name} contains ${fileName}`
-      });
-    }
-
-    if (parsed.variant) {
-      const key = `${parsed.episodeId}:${parsed.variant}:${parsed.pageNumber}`;
-      const existing = fileByKey.get(key) ?? [];
-      existing.push(relativePath);
-      fileByKey.set(key, existing);
-    }
-
-    registerFile(library, parsed.episodeId, {
-      name: fileName,
-      relativePath,
-      absolutePath: path.join(folderPath, fileName),
-      source: folderPath
-    }, 'month-flat', folderPath, parsed);
-  }
-
-  for (const [key, paths] of fileByKey.entries()) {
-    if (paths.length > 1) {
-      const [episodeId, variant, pageNumber] = key.split(':');
-      addLibraryWarning(library, {
-        type: 'duplicate-page-number',
-        severity: 'warning',
-        episodeId,
-        path: paths[0],
-        relatedPaths: paths.slice(1),
-        message: `Duplicate page number ${variant}${pageNumber}`
-      });
-    }
-  }
+  await scanDatedFolder(library, archiveRoot, folderEntry, {
+    layout: 'month-flat',
+    identityMarkers,
+    invalidEpisodeId: folderEntry.name,
+    mismatchFolder: folderEntry.name,
+    fileEpisodeId: parsed => parsed.episodeId,
+    isMismatch: parsed => !parsed.episodeId.startsWith(month),
+    mismatchEpisodeId: parsed => parsed.episodeId
+  });
 }
 
 export async function scanArchive(archiveRoot, workspaceRoot, variantAssignments = null, { finalize = true, recognition = null } = {}) {

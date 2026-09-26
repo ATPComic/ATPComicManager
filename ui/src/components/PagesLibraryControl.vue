@@ -1,13 +1,13 @@
 <script setup>
 import { ref, shallowRef, watch } from 'vue';
 import { Snackbar } from '@varlet/ui';
-import { importPagesLibrary, requestJson } from '../api.js';
+import { importPagesLibrary, requestJson } from '../services/api.js';
 import { t } from '../../../public/i18n.js';
-import { mdiFolderOpenOutline, mdiCodeJson } from '../icons.js';
+import { mdiFolderOpenOutline, mdiCodeJson } from '../lib/icons.js';
 import MdiIcon from './MdiIcon.vue';
-import { appPath } from '../navigation.js';
-import { directoryAccess, restoreDirectoryAccess } from '../pages/access.js';
-import { downloadLibraryBackup } from '../pages/backup.js';
+import { appPath } from '../lib/navigation.js';
+import { directoryAccess, restoreDirectoryAccess } from '../platform/pwa/access.js';
+import { downloadLibraryBackup } from '../platform/pwa/backup.js';
 import { pagesText } from '../../../public/locales/pages.js';
 
 const props = defineProps({ autoOpen: Boolean });

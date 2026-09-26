@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadTagState, mergeTagMaps, saveTagState } from '../src/tag-store.js';
+import { loadTagState, mergeTagMaps, saveTagState } from '../src/stores/tag-store.js';
 
 test('tag state normalizes categories and persists episode tags', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'comic-manager-tags-'));

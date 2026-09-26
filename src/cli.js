@@ -1,13 +1,13 @@
 import { scanWorkspace } from './scanner/scanner.js';
 import { mergeSharedLibrary, writeLibrary } from './model/library.js';
-import { loadThemes, saveTheme } from './themes/store.js';
+import { loadThemes, saveTheme } from './stores/theme-store.js';
 import { createPlan } from './planner/planner.js';
 import { applyPlan } from './apply/apply.js';
 import { startServer } from './server.js';
 import { resolveWorkspaceConfig, parseArgs } from './utils/cli.js';
-import { loadVariantAssignments } from './variant-store.js';
-import { loadSharedImport } from './shared-import-store.js';
-import { loadRecognitionState } from './recognition-store.js';
+import { loadVariantAssignments } from './stores/variant-store.js';
+import { loadSharedImport } from './stores/shared-import-store.js';
+import { loadRecognitionState } from './stores/recognition-store.js';
 import { initializeStorage } from './storage/initialize.js';
 
 async function main() {

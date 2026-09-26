@@ -1,4 +1,4 @@
-import { mountApp } from './bootstrap.js';
-import VariantsApp from './VariantsApp.vue';
+import { mountApp } from './app/bootstrap.js';
+import VariantsApp from './app/VariantsApp.vue';
 
 mountApp(VariantsApp);

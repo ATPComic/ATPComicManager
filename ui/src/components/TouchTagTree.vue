@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import { tagDefinitionChildren } from '../../../public/tag-model.js';
 import { t } from '../../../public/i18n.js';
-import { mdiCheck, mdiChevronRight } from '../icons.js';
+import { mdiCheck, mdiChevronRight } from '../lib/icons.js';
 import MdiIcon from './MdiIcon.vue';
 defineOptions({ name: 'TouchTagTree' });
 defineProps({ nodes: Array, selectedIds: Set, counts: Object, categoryStyle: Object });

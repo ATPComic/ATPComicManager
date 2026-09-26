@@ -1,11 +1,11 @@
 <script setup>
 import { computed, ref, watchEffect } from 'vue';
-import { locale, t } from '../../public/i18n.js';
-import { privacyContent, privacyUpdated } from '../../public/locales/privacy.js';
-import { appPath } from './navigation.js';
-import SettingsMenu from './components/SettingsMenu.vue';
-import MdiIcon from './components/MdiIcon.vue';
-import { mdiChevronLeft } from './icons.js';
+import { locale, t } from '../../../public/i18n.js';
+import { privacyContent, privacyUpdated } from '../../../public/locales/privacy.js';
+import { appPath } from '../lib/navigation.js';
+import SettingsMenu from '../components/SettingsMenu.vue';
+import MdiIcon from '../components/MdiIcon.vue';
+import { mdiChevronLeft } from '../lib/icons.js';
 
 const selectedLocale = ref(locale);
 function changeLocale(value) {

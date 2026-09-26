@@ -3,11 +3,11 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { loadSharedImport } from '../src/shared-import-store.js';
+import { loadSharedImport } from '../src/stores/shared-import-store.js';
 import { storageFor } from '../src/storage/database.js';
 import { startServer } from '../src/server.js';
 import { resolveWorkspaceConfig } from '../src/utils/cli.js';
-import { loadRecognitionState, saveRecognitionState } from '../src/recognition-store.js';
+import { loadRecognitionState, saveRecognitionState } from '../src/stores/recognition-store.js';
 
 test('shared JSON carries custom recognition, dates and manual variants across workspaces and restarts', async () => {
   const episodeId = 'folder:Archive/Set-One';

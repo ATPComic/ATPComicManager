@@ -27,17 +27,20 @@ async function chooseDirectory() {
   try { directory.value = await window.showDirectoryPicker({ mode: 'read', id: 'atp-library' }); }
   catch (error) { if (error.name !== 'AbortError') Snackbar.error({ content: error.message }); }
 }
+
 async function reconnect() {
   try {
     if (await restoreDirectoryAccess()) emit('imported');
     else Snackbar.warning({ content: t('pagesPermissionRequired') });
   } catch (error) { Snackbar.error({ content: error.message }); }
 }
+
 async function sameAsStored(root) {
   const stored = directoryAccess.value.root;
   if (!stored || !root) return false;
   try { return await root.isSameEntry(stored); } catch { return false; }
 }
+
 async function start() {
   const root = directory.value || directoryAccess.value.root;
   if (!root || busy.value) return;
@@ -49,6 +52,7 @@ async function start() {
   }
   await runImport(root);
 }
+
 async function runImport(root) {
   busy.value = true;
   try {
@@ -59,17 +63,20 @@ async function runImport(root) {
   } catch (error) { Snackbar.error({ content: t(error.message) }); show.value = true; }
   finally { busy.value = false; progress.value = ''; }
 }
+
 function cancelReplace() {
   confirmReplace.value = false;
   pendingRoot.value = null;
   show.value = true;
 }
+
 async function confirmReplaceAndOpen() {
   const root = pendingRoot.value;
   confirmReplace.value = false;
   pendingRoot.value = null;
   if (root) await runImport(root);
 }
+
 async function backup() {
   if (backingUp.value) return;
   backingUp.value = true;
@@ -77,6 +84,7 @@ async function backup() {
   catch { Snackbar.error({ content: t('exportFailed') }); }
   finally { backingUp.value = false; }
 }
+
 async function scan() {
   busy.value = true;
   try { await requestJson('/api/scan', { method: 'POST' }); emit('imported'); }

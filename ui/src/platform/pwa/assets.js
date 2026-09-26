@@ -1,6 +1,7 @@
 import { createAssetsDbOpener, PAGES_ASSETS_DB } from '../../../../public/pages-assets-db.js';
 
 let opener;
+
 const open = () => (opener ??= createAssetsDbOpener(indexedDB))();
 
 export async function assetStore(key, value) {
@@ -47,6 +48,7 @@ export async function storeAssetEntries(entries, preserveThumbnails = false) {
     await storeAssetBatch(entries.slice(offset, offset + 256), preserveThumbnails);
   }
 }
+
 async function storeAssetBatch(entries, preserveThumbnails) {
   const db = await open();
   return new Promise((resolve, reject) => {

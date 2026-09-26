@@ -71,6 +71,7 @@ async function saveWorkspace(workspaceRoot) {
 }
 
 function registerWorkspaceHandlers() {
+  ipcMain.handle('app-version:get', () => app.getVersion());
   ipcMain.on('interface-locale', (event, value) => {
     if (mainWindow && event.sender === mainWindow.webContents && supportedLocales.includes(value)) interfaceLocale = value;
   });

@@ -16,6 +16,7 @@ let nextId = 0;
 const requests = new Map();
 let state;
 let initializing;
+
 function database(operation, state) {
   if (!worker) {
     worker = new Worker(new URL('./database.worker.js', import.meta.url), { type: 'module' });
@@ -35,6 +36,7 @@ function database(operation, state) {
     worker.postMessage({ id, operation, state });
   });
 }
+
 export function initializePages() {
   return initializing ??= (async () => {
     if (!('serviceWorker' in navigator)) throw new Error(t('pagesStorageError'));
@@ -55,12 +57,14 @@ export function initializePages() {
     return state;
   })();
 }
+
 async function persist(next) {
   state = await database('save', next);
   return structuredClone(state);
 }
 
 const OPFS_DATABASE_DIRECTORY = 'atp-comic-pages-v1';
+
 export async function resetPagesData() {
   try { worker?.terminate(); } catch { /* The worker may already be stopped. */ }
   worker = undefined;
@@ -97,6 +101,7 @@ export function importPagesFiles(input, progress) {
   operations = operation.catch(() => {});
   return operation;
 }
+
 async function importDirectory({ catalog, directory }, progress = () => {}) {
   await initializePages();
   const previousDirectory = await assetStore('directory');
@@ -140,15 +145,18 @@ async function importDirectory({ catalog, directory }, progress = () => {}) {
 }
 
 let scanSignature;
+
 function directorySignature(files) {
   return files.map(file => file.webkitRelativePath).sort().join('\n') + JSON.stringify(state.recognition);
 }
+
 function librarySignature(library) {
   return Object.entries(library?.episodes ?? {})
     .flatMap(([id, episode]) => (episode.files ?? []).map(file => `${id}\u0000${file.relativePath ?? ''}\u0000${file.assetKey ?? ''}\u0000${file.missing ? 1 : 0}`))
     .sort()
     .join('\u0001');
 }
+
 async function rescanDirectory() {
   if (!await checkDirectoryAccess()) throw new Error('pagesPermissionRequired');
   const root = await assetStore('directory');
@@ -196,6 +204,7 @@ function startDirectoryMonitor() {
 }
 
 let operations = Promise.resolve();
+
 export function pagesRequest(url, options = {}) {
   const operation = operations.then(() => handleRequest(url, options));
   operations = operation.catch(() => {});

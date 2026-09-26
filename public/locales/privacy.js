@@ -1,4 +1,5 @@
 export const privacyUpdated = '2026-09-14';
+
 export const privacyContent = {
   "en": {
     "summary": "ATP Comic is an open-source application for viewing and arranging variant sets.\n\nWe are committed to keeping your library private. ATP Comic processes images and arrangements locally and does not upload them. We do not collect reading activity or use advertising, analytics or automatic telemetry.",

@@ -222,4 +222,5 @@ export function storageFor(file) {
     deleteTheme(title) { return withDatabase(database, db => db.transaction(() => db.run('DELETE FROM collections WHERE title=?',title))); }
   };
 }
+
 export function withDatabase(file, action) { const db = new LibraryDatabase(file); try { return action(db); } finally { db.close(); } }

@@ -17,7 +17,10 @@ export default [
       eqeqeq: ['error', 'smart'],
       'no-var': 'error',
       'prefer-const': 'error',
-      'object-shorthand': ['error', 'properties']
+      'object-shorthand': ['error', 'properties'],
+      'padding-line-between-statements': ['error',
+        { blankLine: 'always', prev: ['function', 'export'], next: ['function', 'export'] }
+      ]
     }
   },
   {

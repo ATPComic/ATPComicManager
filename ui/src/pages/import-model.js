@@ -1,7 +1,10 @@
 import { portableLibrary, assertPortableJson } from '../../../src/shared-export.js';
-import { normalizeVariantAssignments } from '../../../public/variant-assignment-model.js';
+import { isValidEpisodeId, normalizeVariantAssignments } from '../../../public/variant-assignment-model.js';
 import { isImageFile, datedFileIdentity, compareDatedSourcePriority } from '../../../src/validation/filename.js';
 import { matchArchiveFolderName } from '../../../public/folder-recognition.js';
+import { normalizeTagState, createEmptyTagState } from '../../../public/tag-state.js';
+import { normalizeRecognitionState, createEmptyRecognitionState } from '../../../public/recognition-state.js';
+import { normalizeSharedThemes } from '../../../public/theme-state.js';
 
 export async function collectDirectoryFiles(directory, progress = () => {}) {
   const files = [];
@@ -26,10 +29,16 @@ export function readSharedCatalog(input) {
   const source = input?.export ?? input;
   if (!source?.library?.episodes || !Array.isArray(source?.tags?.categories) || !source.variants) throw new Error('pagesInvalidImport');
   assertPortableJson(source);
+  // Fail closed on prototype-shaped or otherwise invalid episode IDs so the
+  // catalog writer never receives hostile keys from a shared JSON file.
+  const library = portableLibrary(source.library);
+  for (const id of Object.keys(library.episodes)) if (!isValidEpisodeId(id)) delete library.episodes[id];
   return {
-    library: { ...portableLibrary(source.library), warnings: [] },
-    tags: source.tags, themes: source.themes ?? [], variantAssignments: normalizeVariantAssignments(source.variants),
-    recognition: source.recognition ?? { version: 1, rules: [], identityMarkers: [], episodeDates: {} }
+    library: { ...library, warnings: [] },
+    tags: normalizeTagState(source.tags),
+    themes: normalizeSharedThemes(source.themes ?? []),
+    variantAssignments: normalizeVariantAssignments(source.variants),
+    recognition: normalizeRecognitionState(source.recognition)
   };
 }
 
@@ -37,8 +46,8 @@ export function emptyLibraryState() {
   return {
     library: { episodes: {}, warnings: [] },
     themes: [],
-    tags: { version: 3, categories: [], episodeTags: {} },
-    recognition: { version: 1, rules: [], identityMarkers: [], episodeDates: {} },
+    tags: createEmptyTagState(),
+    recognition: createEmptyRecognitionState(),
     variantAssignments: { version: 3, peekRelations: {}, episodes: {} }
   };
 }

@@ -6,7 +6,7 @@ import DiscoveryFeed from './components/DiscoveryFeed.vue';
 import PagesLibraryControl from './components/PagesLibraryControl.vue';
 import PagesAccessBanner from './components/PagesAccessBanner.vue';
 import { pagesText } from '../../public/locales/pages.js';
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRaw } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { Dialog, Snackbar } from '@varlet/ui';
 import {
   mdiBookMultipleOutline,
@@ -48,6 +48,8 @@ import DateFilterControl from './components/DateFilterControl.vue';
 import EpisodeDateControl from './components/EpisodeDateControl.vue';
 import { chooseAndroidLibrary, isAndroidApp, isPagesApp, nativeAssetUrl, requestJson } from './api.js';
 import SettingsMenu from './components/SettingsMenu.vue';
+import { downloadJsonFile } from './download.js';
+import { cloneData } from './clone-data.js';
 import { navigateToPage, returnPathFromHref, variantEpisodePath } from './navigation.js';
 import { tagCategoryStyle as getTagCategoryStyle } from './tag-colors.js';
 import { EPISODE_DRAG_TYPE, draggedEpisodeId, compareEpisodesByDate, countTagEpisodes, matchesDateFilter, matchesTagFilter, moveItemToSlot } from '../../public/collection-model.js';
@@ -55,10 +57,9 @@ import { locale, t } from '../../public/i18n.js';
 import { ComicReader } from '../../public/reader.js';
 import { getThumbnailUrl, setReaderAssetUrlResolver } from '../../public/reader-model.js';
 import { readInitialViewState } from '../../public/view-state.js';
-import {
-  flattenTagDefinitions,
-  getOrderedTagEntries
-} from '../../public/tag-model.js';
+import { flattenTagDefinitions, getOrderedTagEntries } from '../../public/tag-model.js';
+import { createEmptyTagState, mergeTagMaps } from '../../public/tag-state.js';
+import { createEmptyRecognitionState } from '../../public/recognition-state.js';
 import { getVirtualWindow } from '../../public/virtual-list.js';
 
 const READER_SETTINGS_KEY = 'comic-manager.reader-settings';
@@ -74,8 +75,8 @@ let readerReturnPath = pendingInitialEpisodeId ? returnPathFromHref(window.locat
 const state = reactive({
   library: { episodes: {}, warnings: [] },
   themes: [],
-  tags: { version: 3, categories: [], episodeTags: {} },
-  recognition: { version: 1, rules: [], episodeDates: {}, identityMarkers: [] },
+  tags: createEmptyTagState(),
+  recognition: createEmptyRecognitionState(),
   runtime: { workspaceRoot: '' },
   selectedThemeTitle: null,
   selectedEpisodeId: null,
@@ -142,10 +143,6 @@ let resizeObserver;
 let scrollFrame = 0;
 let suppressCollectionClickUntil = 0;
 let suppressEpisodeClickUntil = 0;
-
-function cloneData(value) {
-  return structuredClone(toRaw(value));
-}
 
 function tagDefinitionLabel(definition, fallback = '') {
   if (!definition) return fallback;
@@ -216,14 +213,6 @@ function orderedTagItems(tags) {
 
 function flattenTags(tags) {
   return orderedTagItems(tags).map((item) => item.label);
-}
-
-function mergeTagMaps(target, source) {
-  const result = cloneData(target ?? {});
-  for (const [categoryId, values] of Object.entries(source ?? {})) {
-    result[categoryId] = [...new Set([...(result[categoryId] ?? []), ...(values ?? [])])];
-  }
-  return result;
 }
 
 function categoryTagEntries(category) {
@@ -580,15 +569,7 @@ async function saveEpisodeDate(episodeId, date) {
 }
 
 function downloadJsonExport(payload) {
-  const blob = new Blob([`${JSON.stringify(payload.export, null, 2)}\n`], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `ATP-Comic-export-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  downloadJsonFile(payload.export, `ATP-Comic-export-${new Date().toISOString().slice(0, 10)}.json`);
 }
 
 async function runAction(name, endpoint, onSuccess = null) {

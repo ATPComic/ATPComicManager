@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { scanDirectoryRecords } from '../ui/src/pages/scan-model.js';
-import { collectDirectoryFiles, emptyLibraryState, indexImportedFiles, matchImportedFile } from '../ui/src/pages/import-model.js';
+import { collectDirectoryFiles, emptyLibraryState, indexImportedFiles, matchImportedFile, readSharedCatalog } from '../ui/src/pages/import-model.js';
 
 const initial = () => ({ library: { episodes: {} }, recognition: { rules: [], identityMarkers: [], episodeDates: {} }, variantAssignments: { version: 3, episodes: {} } });
 const file = path => ({ name: path.split('/').at(-1), webkitRelativePath: `Root/${path}` });
@@ -70,4 +70,17 @@ test('Pages reselecting a different folder starts from a fresh library state', (
   const library = scanDirectoryRecords([file('202601/20260101_a1.png')], state, 'fresh');
   assert.deepEqual(Object.keys(library.episodes), ['20260101']);
   assert.equal(library.episodes['20260101'].files[0].assetKey, 'fresh:202601/20260101_a1.png');
+});
+
+test('Pages shared JSON is normalized and prototype-shaped keys are dropped', () => {
+  const source = JSON.parse('{"library":{"episodes":{"__proto__":{"layout":"month-flat","files":[]},"20260101":{"layout":"month-flat","files":[]}}},"tags":{"version":3,"categories":[{"id":"x"}],"episodeTags":{"__proto__":{"x":["pwned"]}}},"variants":{"version":3,"episodes":{},"peekRelations":{}}}');
+  const state = readSharedCatalog(source);
+  assert.deepEqual(Object.keys(state.library.episodes), ['20260101']);
+  assert.deepEqual(state.tags, { version: 3, categories: [], episodeTags: {} });
+  assert.equal(Object.prototype.x, undefined);
+  assert.equal(Object.prototype.pwned, undefined);
+  assert.throws(() => readSharedCatalog({ library: { episodes: {} }, tags: { categories: [] }, variants: {}, recognition: { identityMarkers: {} } }), /markers/);
+  const recognition = readSharedCatalog({ library: { episodes: {} }, tags: { categories: [] }, variants: {}, recognition: { episodeDates: JSON.parse('{"__proto__":"2026-01-01"}') } }).recognition;
+  assert.deepEqual(recognition.episodeDates, {});
+  assert.throws(() => readSharedCatalog({ library: { episodes: {} }, tags: { categories: [] }, variants: {}, themes: [{ title: 'Collection', episodes: ['not a valid id'] }] }), /invalid episode/);
 });

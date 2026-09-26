@@ -7,6 +7,9 @@ import { assetStore, clearAssetStore, pruneAssets, storeAssetEntries } from './a
 import { collectDirectoryFiles, emptyLibraryState, indexImportedFiles, matchImportedFile, readSharedCatalog } from './import-model.js';
 import { scanDirectoryRecords } from './scan-model.js';
 import { checkDirectoryAccess, reportDirectoryError } from './access.js';
+import { normalizeTagState } from '../../../public/tag-state.js';
+import { normalizeRecognitionState } from '../../../public/recognition-state.js';
+import { normalizeThemeRecord, normalizeThemeTitle } from '../../../public/theme-state.js';
 
 let worker;
 let nextId = 0;
@@ -76,10 +79,16 @@ export async function resetPagesData() {
   if (!removedOpfs) {
     try { await database('save', emptyLibraryState()); } catch { /* The catalog will be recreated on demand. */ }
   }
-  try { for (const name of await caches.keys()) await caches.delete(name); } catch { /* Cache storage can be unavailable. */ }
   try {
-    for (const registration of await navigator.serviceWorker.getRegistrations()) await registration.unregister();
+    for (const name of await caches.keys()) if (name.startsWith('atp-pages-app-')) await caches.delete(name);
+  } catch { /* Cache storage can be unavailable. */ }
+  try {
+    const scope = new URL(import.meta.env.BASE_URL, window.location.origin).href;
+    for (const registration of await navigator.serviceWorker.getRegistrations()) if (registration.scope === scope) await registration.unregister();
   } catch { /* Service workers can be unavailable outside secure contexts. */ }
+  for (const key of ['comic-manager.reader-settings', 'comic-manager.locale', 'comic-manager.theme']) {
+    try { localStorage.removeItem(key); } catch { /* Storage can be unavailable. */ }
+  }
   window.location.reload();
 }
 
@@ -172,7 +181,7 @@ function startDirectoryMonitor() {
     const started = Date.now();
     try {
       if (started - last >= 15000 && await checkDirectoryAccess()) {
-        await pagesRequest('/api/scan'); last = Date.now();
+        await pagesRequest('/api/scan', { method: 'POST' }); last = Date.now();
       }
     } catch { /* The access status exposes errors without interrupting reading. */ }
     finally {
@@ -203,31 +212,41 @@ async function handleRequest(url, options = {}) {
     return response.json();
   }
   if (url === '/api/state') return structuredClone({ ...state, initialized: true, runtime: { workspaceRoot: '' } });
-  if (url === '/api/scan') return rescanDirectory();
+  if (url === '/api/scan') {
+    if (method !== 'POST') throw new Error(t('pagesUnavailable'));
+    return rescanDirectory();
+  }
   if (url === '/api/variants' && method === 'GET') return { variantAssignments: structuredClone(state.variantAssignments) };
   if (url === '/api/export/json') {
+    if (method !== 'POST') throw new Error(t('pagesUnavailable'));
     const exported = { library: portableLibrary(state.library), tags: state.tags, variants: state.variantAssignments, themes: state.themes, recognition: state.recognition };
     assertPortableJson(exported);
-    return { export: structuredClone(exported) };
+    return { ok: true, export: structuredClone(exported) };
   }
   const next = structuredClone(state);
   if (url === '/api/variants' && method === 'PUT') {
     next.variantAssignments = normalizeVariantAssignments(body);
     applyVariantAssignments(next.library, next.variantAssignments, next.recognition.identityMarkers ?? []);
-  } else if (url === '/api/tags' && method === 'PUT') next.tags = body;
+  } else if (url === '/api/tags' && method === 'PUT') next.tags = normalizeTagState(body);
   else if (url === '/api/recognition' && method === 'PUT') {
-    next.recognition = body;
+    next.recognition = normalizeRecognitionState(body);
     for (const [id, episode] of Object.entries(next.library.episodes)) {
-      if (episode.layout === 'rule-folder') episode.date = body.episodeDates?.[id] ?? null;
+      if (episode.layout === 'rule-folder') episode.date = next.recognition.episodeDates?.[id] ?? null;
     }
   }
   else if (url === '/api/themes' && method === 'POST') {
-    const index = next.themes.findIndex(theme => theme.title === body.title);
-    if (index < 0) next.themes.push(body); else next.themes[index] = body;
+    const existing = next.themes.find(theme => theme.title === body?.title);
+    // Mirror the server: never create memberships from unknown episode IDs.
+    if (!Array.isArray(body?.episodes) || body.episodes.some(id => typeof id !== 'string' || (!Object.hasOwn(next.library.episodes, id) && !(existing?.episodes ?? []).includes(id)))) {
+      throw new Error(t('pagesThemeUnknownEpisode'));
+    }
+    const theme = normalizeThemeRecord(body);
+    const index = next.themes.findIndex(item => item.title === theme.title);
+    if (index < 0) next.themes.push(theme); else next.themes[index] = theme;
   } else if (url.startsWith('/api/themes/') && ['DELETE', 'PATCH'].includes(method)) {
     const title = decodeURIComponent(url.slice('/api/themes/'.length));
     if (method === 'DELETE') next.themes = next.themes.filter(theme => theme.title !== title);
-    else { const theme = next.themes.find(theme => theme.title === title); if (theme) theme.title = body.title; }
+    else { const theme = next.themes.find(theme => theme.title === title); if (theme) theme.title = normalizeThemeTitle(body.title); }
   } else throw new Error(t('pagesUnavailable'));
   const saved = await persist(next);
   if (url === '/api/recognition' && await checkDirectoryAccess()) {

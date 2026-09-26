@@ -19,9 +19,12 @@ test('privacy notice covers all supported languages and includes the revision da
 test('page entries share the brand theme and settings items share a style', async () => {
   for (const file of ['main.js', 'privacy-main.js', 'tags-main.js', 'variants-main.js', 'warnings-main.js']) {
     const source = await readFile(new URL(`../ui/src/${file}`, import.meta.url), 'utf8');
-    assert.match(source, /installTheme\(\)/);
+    assert.match(source, /mountApp\(/);
     assert.doesNotMatch(source, /Themes.md3Dark/);
   }
+  const bootstrap = await readFile(new URL('../ui/src/bootstrap.js', import.meta.url), 'utf8');
+  assert.match(bootstrap, /installTheme\(\)/);
+  assert.doesNotMatch(bootstrap, /Themes.md3Dark/);
   const about = await readFile(new URL('../ui/src/components/SettingsMenu.vue', import.meta.url), 'utf8');
   assert.equal((about.match(/<AppMenuItem /g) ?? []).length, 2);
   assert.match(about, /class="about-links"/);

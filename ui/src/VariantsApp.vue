@@ -1,11 +1,12 @@
 <script setup>
 import PageSkeleton from './components/PageSkeleton.vue';
-import { computed, onMounted, reactive, ref, toRaw } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { Dialog, Snackbar } from '@varlet/ui';
 import { mdiArrowRight, mdiChevronLeft, mdiContentSaveOutline, mdiDeleteOutline, mdiDragVertical, mdiImageOutline, mdiPencilOutline, mdiPlus, mdiRefresh, mdiRestore, mdiTuneVariant } from './icons.js';
 import MdiIcon from './components/MdiIcon.vue';
 import SettingsMenu from './components/SettingsMenu.vue';
 import { isPagesApp, requestJson } from './api.js';
+import { cloneData } from './clone-data.js';
 import { useUnsavedEdits } from './use-unsaved-edits.js';
 import { libraryEpisodePath, returnFromPage, returnPathFromHref } from './navigation.js';
 import { locale, t } from '../../public/i18n.js';
@@ -60,10 +61,6 @@ const localeOptions = [
   { label: t('languageChineseSimplified'), value: 'zh-CN', ripple: true },
   { label: t('languageChineseTraditional'), value: 'zh-TW', ripple: true }
 ];
-
-function cloneData(value) {
-  return structuredClone(toRaw(value));
-}
 
 function manualFiles(episodeId) {
   return (state.library.episodes?.[episodeId]?.files ?? [])

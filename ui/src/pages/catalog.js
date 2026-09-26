@@ -1,3 +1,5 @@
+import { createEmptyRecognitionState } from '../../../public/recognition-state.js';
+
 export const schema = `
 PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS episodes(id TEXT PRIMARY KEY, data TEXT NOT NULL);
@@ -9,6 +11,11 @@ CREATE TABLE IF NOT EXISTS theme_episodes(theme TEXT REFERENCES themes(title) ON
 CREATE TABLE IF NOT EXISTS variants(episode TEXT PRIMARY KEY REFERENCES episodes(id) ON DELETE CASCADE, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, data TEXT NOT NULL);
 `;
+
+// A shared JSON file or a stray key must never reach Object.prototype through a
+// plain {} lookup, so reject prototype-shaped primary keys at the catalog sink.
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const isUnsafeKey = value => UNSAFE_KEYS.has(String(value));
 
 export function saveCatalog(db, state) {
   const tables = {
@@ -22,14 +29,19 @@ export function saveCatalog(db, state) {
   db.exec('BEGIN IMMEDIATE');
   try {
     for (const [id, episode] of Object.entries(state.library.episodes)) {
+      if (isUnsafeKey(id)) continue;
       const { files = [], ...data } = episode;
       insert('episodes', [id, JSON.stringify(data)]);
       files.forEach((file, index) => insert('files', [id, index, JSON.stringify(file)]));
     }
-    state.tags.categories.forEach((category, index) => insert('categories', [category.id, index, JSON.stringify(category)]));
+    state.tags.categories.forEach((category, index) => {
+      if (isUnsafeKey(category.id)) return;
+      insert('categories', [category.id, index, JSON.stringify(category)]);
+    });
     for (const [episode, tags] of Object.entries(state.tags.episodeTags ?? {})) {
       if (!state.library.episodes[episode]) continue;
       for (const [category, values] of Object.entries(tags)) {
+        if (isUnsafeKey(episode) || isUnsafeKey(category)) continue;
         if (state.tags.categories.some(item => item.id === category)) insert('episode_tags', [episode, category, JSON.stringify(values)]);
       }
     }
@@ -37,12 +49,12 @@ export function saveCatalog(db, state) {
       const { episodes = [], ...data } = theme;
       insert('themes', [theme.title, index, JSON.stringify(data)]);
       [...new Set(episodes)].forEach((episode, ordinal) => {
-        if (state.library.episodes[episode]) insert('theme_episodes', [theme.title, episode, ordinal]);
+        if (!isUnsafeKey(episode) && state.library.episodes[episode]) insert('theme_episodes', [theme.title, episode, ordinal]);
       });
     });
     const variants = state.variantAssignments;
     for (const [episode, assignments] of Object.entries(variants.episodes ?? {})) {
-      if (state.library.episodes[episode]) insert('variants', [episode, JSON.stringify(assignments)]);
+      if (!isUnsafeKey(episode) && state.library.episodes[episode]) insert('variants', [episode, JSON.stringify(assignments)]);
     }
     const { episodes, ...variantMeta } = variants;
     insert('settings', ['variants', JSON.stringify(variantMeta)]);
@@ -77,13 +89,16 @@ export function loadCatalog(db) {
   for (const row of rows('files ORDER BY ordinal')) episodes[row.episode].files.push(JSON.parse(row.data));
   const categories = rows('categories ORDER BY ordinal').map(row => JSON.parse(row.data));
   const episodeTags = {};
-  for (const row of rows('episode_tags')) (episodeTags[row.episode] ??= {})[row.category] = JSON.parse(row.data);
+  for (const row of rows('episode_tags')) {
+    if (isUnsafeKey(row.episode) || isUnsafeKey(row.category)) continue;
+    (episodeTags[row.episode] ??= {})[row.category] = JSON.parse(row.data);
+  }
   const themes = rows('themes ORDER BY ordinal').map(row => ({ ...JSON.parse(row.data), episodes: [] }));
   const themeIndex = new Map(themes.map(theme => [theme.title, theme]));
   for (const row of rows('theme_episodes ORDER BY ordinal')) themeIndex.get(row.theme).episodes.push(row.episode);
   return {
     library: { episodes, warnings: [] }, themes, tags: { version: 3, categories, episodeTags },
-    recognition: settings.recognition ?? { version: 1, rules: [], identityMarkers: [], episodeDates: {} },
+    recognition: settings.recognition ?? createEmptyRecognitionState(),
     variantAssignments: { version: 3, peekRelations: {}, ...settings.variants, episodes: Object.fromEntries(rows('variants').map(row => [row.episode, JSON.parse(row.data)])) }
   };
 }

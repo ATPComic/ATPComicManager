@@ -1,3 +1,5 @@
+import { normalizeCategoryColor as normalizeColorValue } from '../../public/tag-state.js';
+
 export const TAG_CATEGORY_COLORS = [
   { id: 'purple', nameKey: 'colorPurple', accent: '#d0bcff', container: '#4f378b', onContainer: '#eaddff' },
   { id: 'violet', nameKey: 'colorViolet', accent: '#e1b7ff', container: '#5c3f75', onContainer: '#f2daff' },
@@ -19,8 +21,7 @@ export const TAG_CATEGORY_COLORS = [
 ];
 
 export function normalizeCategoryColor(value) {
-  const color = String(value ?? '').trim();
-  return /^#[\da-f]{6}$/i.test(color) ? color.toLowerCase() : '';
+  return normalizeColorValue(typeof value === 'string' ? value.trim() : value) ?? '';
 }
 
 function defaultTagCategoryColor(categoryId) {

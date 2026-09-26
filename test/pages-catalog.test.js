@@ -59,3 +59,23 @@ test('Pages matches large catalogs through one reusable index', () => {
   const ambiguous = indexImportedFiles([{ name: 'x.png', webkitRelativePath: 'one/day/x.png' }, { name: 'x.png', webkitRelativePath: 'two/day/x.png' }]);
   assert.equal(matchImportedFile({ relativePath: 'day/x.png' }, ambiguous), null);
 });
+
+test('Pages catalog ignores prototype-shaped keys from hostile catalogs', () => {
+  const native = new DatabaseSync(':memory:');
+  const db = adapter(native);
+  try {
+    db.exec(schema);
+    native.exec("INSERT INTO episodes VALUES('__proto__','{}')");
+    native.exec("INSERT INTO categories VALUES('x',0,'{}')");
+    native.exec("INSERT INTO episode_tags VALUES('__proto__','x','[\"pwned\"]')");
+    const loaded = loadCatalog(db);
+    assert.deepEqual(loaded.tags.episodeTags, {});
+    assert.equal(Object.prototype.x, undefined);
+    assert.equal(Object.prototype.pwned, undefined);
+    const state = loadCatalog(db);
+    state.tags.episodeTags = JSON.parse('{"__proto__":{"x":["pwned"]}}');
+    state.tags.categories = [{ id: 'x', values: [] }];
+    assert.doesNotThrow(() => saveCatalog(db, state));
+    assert.equal(Object.prototype.pwned, undefined);
+  } finally { native.close(); }
+});

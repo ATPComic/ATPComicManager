@@ -1,6 +1,6 @@
 <script setup>
 import PageSkeleton from './components/PageSkeleton.vue';
-import { onMounted, reactive, ref, toRaw } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 import { Snackbar } from '@varlet/ui';
 import {
   mdiCheck,
@@ -17,6 +17,7 @@ import SettingsMenu from './components/SettingsMenu.vue';
 import MdiIcon from './components/MdiIcon.vue';
 import TagTreeEditor from './components/TagTreeEditor.vue';
 import { requestJson } from './api.js';
+import { cloneData } from './clone-data.js';
 import { returnFromPage } from './navigation.js';
 import { useUnsavedEdits } from './use-unsaved-edits.js';
 import {
@@ -27,9 +28,10 @@ import {
 } from './tag-colors.js';
 import { locale, t } from '../../public/i18n.js';
 import { migrateTagMap, normalizeTagDefinition, relocateTagDefinition } from '../../public/tag-model.js';
+import { createEmptyTagState } from '../../public/tag-state.js';
 
 const state = reactive({
-  tags: { version: 3, categories: [], episodeTags: {} },
+  tags: createEmptyTagState(),
   themes: [],
   busy: false
 });
@@ -46,10 +48,6 @@ const localeOptions = [
   { label: t('languageChineseSimplified'), value: 'zh-CN' },
   { label: t('languageChineseTraditional'), value: 'zh-TW' }
 ];
-
-function cloneData(value) {
-  return structuredClone(toRaw(value));
-}
 
 function createStableId(prefix) {
   return `${prefix}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;

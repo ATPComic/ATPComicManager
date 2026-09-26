@@ -22,10 +22,6 @@ export function resolvePathInside(rootPath, candidatePath) {
   return candidate;
 }
 
-export function sortEpisodeIds(values) {
-  return [...values].sort((left, right) => left.localeCompare(right));
-}
-
 export function getFolderBaseName(folderName) {
   return matchArchiveFolderName(folderName)?.date ?? folderName;
 }

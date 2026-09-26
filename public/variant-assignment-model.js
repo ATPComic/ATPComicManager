@@ -1,5 +1,4 @@
 export const DEFAULT_VARIANT_NAMES = ['a', 'b', 'c'];
-export const VARIANT_NAMES = DEFAULT_VARIANT_NAMES;
 
 export function isValidEpisodeId(value) {
   return typeof value === 'string' && (/^\d{8}$/.test(value) || /^folder:[^\u0000-\u001f]{1,505}$/.test(value));
@@ -227,10 +226,6 @@ export function findVariantAssignments(assignments, token) {
     if (index >= 0) matches.push({ variant, index });
   }
   return matches;
-}
-
-export function findVariantAssignment(assignments, token) {
-  return findVariantAssignments(assignments, token)[0] ?? null;
 }
 
 export function addVariant(assignments, variant) {

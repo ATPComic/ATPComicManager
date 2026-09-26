@@ -1,6 +1,5 @@
 import { createServer } from 'node:http';
-import { createReadStream } from 'node:fs';
-import { promises as fs } from 'node:fs';
+import { createReadStream, promises as fs } from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
 import { thumbnailProfile } from '../public/thumbnail-policy.js';
@@ -149,7 +148,7 @@ export async function startServer(config) {
     try {
       const url = new URL(request.url, `http://${request.headers.host}`);
 
-      if (url.pathname.startsWith('/api/state')) {
+      if (url.pathname === '/api/state') {
         const library = await loadLibrary();
         const themes = await loadThemes(config.databasePath);
         const tags = await loadTagState(config.databasePath);
@@ -342,7 +341,16 @@ export async function startServer(config) {
         return;
       }
 
-      const staticAsset = await serveStatic(url.pathname);
+      let staticAsset;
+      try { staticAsset = await serveStatic(url.pathname); }
+      catch (error) {
+        if (error.code === 'ENOENT') {
+          response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+          response.end('Not found');
+          return;
+        }
+        throw error;
+      }
       response.writeHead(200, { 'content-type': staticAsset.contentType });
       response.end(staticAsset.data);
     } catch (error) {

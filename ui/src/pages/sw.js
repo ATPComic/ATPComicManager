@@ -104,32 +104,25 @@ function lazyPreview(db, key, item, source, size = 'small') {
 }
 async function previewCacheResponse(clear) {
   if (clear) previewEpoch++;
-  const db = await new Promise((resolve, reject) => {
-    const request = indexedDB.open('atp-comic-pages-assets-v1', 1);
-    request.onupgradeneeded = () => request.result.createObjectStore('assets');
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+  const db = await openAssets();
+  const result = await new Promise((resolve, reject) => {
+    let bytes = 0;
+    let count = 0;
+    const transaction = db.transaction('assets', clear ? 'readwrite' : 'readonly');
+    const request = transaction.objectStore('assets').openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      const entry = previewCacheEntry(cursor.value, clear);
+      bytes += entry.bytes;
+      count += entry.count;
+      if (clear && entry.count) cursor.update(entry.value);
+      cursor.continue();
+    };
+    transaction.oncomplete = () => resolve({ bytes, count });
+    transaction.onabort = transaction.onerror = () => reject(transaction.error);
   });
-  try {
-    const result = await new Promise((resolve, reject) => {
-      let bytes = 0;
-      let count = 0;
-      const transaction = db.transaction('assets', clear ? 'readwrite' : 'readonly');
-      const request = transaction.objectStore('assets').openCursor();
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (!cursor) return;
-        const entry = previewCacheEntry(cursor.value, clear);
-        bytes += entry.bytes;
-        count += entry.count;
-        if (clear && entry.count) cursor.update(entry.value);
-        cursor.continue();
-      };
-      transaction.oncomplete = () => resolve({ bytes, count });
-      transaction.onabort = transaction.onerror = () => reject(transaction.error);
-    });
-    return Response.json(result);
-  } finally { db.close(); }
+  return Response.json(result);
 }
 async function imageResponse(url) {
   const db = await openAssets();

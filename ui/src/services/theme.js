@@ -1,8 +1,9 @@
 import { StyleProvider, Themes } from '@varlet/ui';
 import { themePresets, hsl } from '../../../public/theme-palette.js';
+import { pagesLocalStorageKey } from '../../../public/pages-assets-db.js';
 import { ref } from 'vue';
 
-const key = 'comic-manager.theme';
+const key = pagesLocalStorageKey(import.meta.env?.BASE_URL ?? '/', 'comic-manager.theme');
 export const selectedTheme = ref('green');
 const normalize = value => Object.hasOwn(themePresets, value) ? value : 'green';
 export function selectTheme(value) {

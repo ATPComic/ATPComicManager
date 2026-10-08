@@ -1,3 +1,5 @@
+import { pagesLocalStorageKey } from './pages-assets-db.js';
+
 export const supportedLocales = ['en', 'ja', 'zh-CN', 'zh-TW'];
 
 export function normalizeSystemLocale(value) {
@@ -17,8 +19,8 @@ export function resolveLocale({ storedLocale, systemLocales = [] } = {}) {
   return 'en';
 }
 
-export function detectLocale({ storage = globalThis.localStorage, navigator = globalThis.navigator } = {}) {
-  const storedLocale = storage?.getItem?.('comic-manager.locale');
+export function detectLocale({ storage = globalThis.localStorage, navigator = globalThis.navigator, base = import.meta.env?.BASE_URL ?? '/' } = {}) {
+  const storedLocale = storage?.getItem?.(pagesLocalStorageKey(base, 'comic-manager.locale'));
   const systemLocales = navigator?.languages?.length
     ? navigator.languages
     : navigator?.language

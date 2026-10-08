@@ -1,4 +1,5 @@
 import { t } from '../../../../public/i18n.js';
+import { pagesAppCachePrefix, pagesLocalStorageKey, pagesOpfsDirectory } from '../../../../public/pages-assets-db.js';
 import { setReaderAssetUrlResolver } from '../../../../public/reader-model.js';
 import { normalizeVariantAssignments } from '../../../../public/variant-assignment-model.js';
 import { applyVariantAssignments } from '../../../../public/variant-assignments.js';
@@ -33,7 +34,7 @@ function database(operation, state) {
   return new Promise((resolve, reject) => {
     const id = ++nextId;
     requests.set(id, { resolve, reject });
-    worker.postMessage({ id, operation, state });
+    worker.postMessage({ id, operation, state, base: import.meta.env?.BASE_URL ?? '/' });
   });
 }
 
@@ -63,7 +64,7 @@ async function persist(next) {
   return structuredClone(state);
 }
 
-const OPFS_DATABASE_DIRECTORY = 'atp-comic-pages-v1';
+const PAGES_BASE = import.meta.env?.BASE_URL ?? '/';
 
 export async function resetPagesData() {
   try { worker?.terminate(); } catch { /* The worker may already be stopped. */ }
@@ -76,7 +77,7 @@ export async function resetPagesData() {
   try {
     const root = await navigator.storage?.getDirectory?.();
     if (root) {
-      await root.removeEntry(OPFS_DATABASE_DIRECTORY, { recursive: true });
+      await root.removeEntry(pagesOpfsDirectory(PAGES_BASE).replace(/^\//, ''), { recursive: true });
       removedOpfs = true;
     }
   } catch { /* The directory may be locked by another tab; fall back to clearing it. */ }
@@ -84,14 +85,14 @@ export async function resetPagesData() {
     try { await database('save', emptyLibraryState()); } catch { /* The catalog will be recreated on demand. */ }
   }
   try {
-    for (const name of await caches.keys()) if (name.startsWith('atp-pages-app-')) await caches.delete(name);
+    for (const name of await caches.keys()) if (name.startsWith(pagesAppCachePrefix(PAGES_BASE))) await caches.delete(name);
   } catch { /* Cache storage can be unavailable. */ }
   try {
-    const scope = new URL(import.meta.env.BASE_URL, window.location.origin).href;
+    const scope = new URL(PAGES_BASE, window.location.origin).href;
     for (const registration of await navigator.serviceWorker.getRegistrations()) if (registration.scope === scope) await registration.unregister();
   } catch { /* Service workers can be unavailable outside secure contexts. */ }
   for (const key of ['comic-manager.reader-settings', 'comic-manager.locale', 'comic-manager.theme']) {
-    try { localStorage.removeItem(key); } catch { /* Storage can be unavailable. */ }
+    try { localStorage.removeItem(pagesLocalStorageKey(PAGES_BASE, key)); } catch { /* Storage can be unavailable. */ }
   }
   window.location.reload();
 }

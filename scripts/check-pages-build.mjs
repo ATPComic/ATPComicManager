@@ -3,7 +3,7 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 
 const root = resolve('dist-pages');
-const base = '/ATPComicManager/';
+const base = process.env.PAGES_BASE || '/ATPComicManager/';
 for (const page of ['index.html', 'privacy/index.html', 'tags.html', 'variants.html', 'warnings.html']) {
   const html = await readFile(resolve(root, page), 'utf8');
   for (const [, url] of html.matchAll(/(?:src|href)="([^"]+)"/g)) {

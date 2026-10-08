@@ -10,6 +10,7 @@ import { cloneData } from '../lib/clone-data.js';
 import { useUnsavedEdits } from '../composables/use-unsaved-edits.js';
 import { libraryEpisodePath, returnFromPage, returnPathFromHref } from '../lib/navigation.js';
 import { locale, t } from '../../../public/i18n.js';
+import { pagesLocalStorageKey } from '../../../public/pages-assets-db.js';
 import { getThumbnailUrl } from '../../../public/reader-model.js';
 import {
   DEFAULT_VARIANT_NAMES,
@@ -453,7 +454,7 @@ async function saveAssignments() {
 
 function changeLocale(value) {
   return edits.leave(() => {
-    localStorage.setItem('comic-manager.locale', value);
+    localStorage.setItem(pagesLocalStorageKey(import.meta.env?.BASE_URL ?? '/', 'comic-manager.locale'), value);
     window.location.reload();
   });
 }

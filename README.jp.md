@@ -105,9 +105,9 @@ npm run build
 
 ### GitHub Pages / PWA
 
-`npm run build:pages` の後に `npm run preview:pages` を実行すると、`/ATPComicManager/` で静的アプリを確認できます。ディレクトリアクセスに対応したブラウザーで共有 JSON を読み込み、画像フォルダーへのアクセスを許可してください。画像は直接読み取り、サムネイルは必要に応じて生成します。ビルドは同一オリジンのみの `Content-Security-Policy` を強制するため、Web 版がライブラリを送信することはありません。オフラインで使えば確認できます。
+`npm run build:pages` の後に `npm run preview:pages` を実行すると、`/ATPComicManager/` で静的アプリを確認できます。ディレクトリアクセスに対応したブラウザーで共有 JSON を読み込み、画像フォルダーへのアクセスを許可してください。画像は直接読み取り、サムネイルは必要に応じて生成します。ビルドは同一オリジンのみの `Content-Security-Policy` を強制するため、Web 版がライブラリを送信することはありません。オフラインで使えば確認できます。`develop` ブランチは `/ATPComicManager/develop/` に公開されます。ローカルでは `PAGES_BASE=/ATPComicManager/develop/ npm run build:pages` でプレビューをビルドし、`npm run preview:pages` で確認できます。
 
-公開にはリポジトリの **Settings → Pages → Source** を **GitHub Actions** に設定します。CI は Windows と Ubuntu で両方のビルドを検証し、すべて成功した後に `main` への push で `dist-pages` を公開します。`main` での手動実行でも公開でき、PR では検証のみ行います。
+公開にはリポジトリの **Settings → Pages → Source** を **GitHub Actions** に設定します。`.github/workflows/pages.yml` は `main` または `develop` への push ごとに `main` から正式版を再ビルドし、`develop` ブランチが存在する場合はそのプレビューを `/ATPComicManager/develop/` にも公開します。`.github/workflows/ci.yml` は Ubuntu 上での検証（lint、テスト、2 種類の Pages ビルド）のみを行い、デプロイはしません。PR は検証のみです。両環境は Service Worker キャッシュ、IndexedDB、OPFS ストレージ、設定キーをそれぞれ名前空間化するため、プレビューが正式なデータに影響することはありません。
 
 ### アイコンのソース
 

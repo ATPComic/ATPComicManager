@@ -58,6 +58,8 @@ export default [
         ...globals.serviceworker,
         // Injected by scripts/pages-plugin.mjs at build time.
         __APP_CACHE__: 'readonly',
+        __APP_CACHE_PREFIX__: 'readonly',
+        __ASSETS_DB_NAME__: 'readonly',
         __APP_FILES__: 'readonly',
         PAGES_ASSETS_DB: 'readonly',
         createAssetsDbOpener: 'readonly',

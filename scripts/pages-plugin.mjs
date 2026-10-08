@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
+import { pagesAppCachePrefix, pagesAssetsDatabaseName } from '../public/pages-assets-db.js';
 
 // A service worker cannot import modules, so shared sources are inlined as
 // plain text. Fail loudly when a module still exports after stripping instead
@@ -25,7 +26,7 @@ const CONTENT_SECURITY_POLICY = [
   "font-src 'self' data:"
 ].join('; ');
 
-export function pagesPlugin() {
+export function pagesPlugin({ base = '/ATPComicManager/' } = {}) {
   return {
     name: 'atp-pages',
     transformIndexHtml(html) {
@@ -34,7 +35,7 @@ export function pagesPlugin() {
       return html.replace('</head>', `<meta http-equiv="Content-Security-Policy" content="${CONTENT_SECURITY_POLICY}"></head>`);
     },
     generateBundle(_options, bundle) {
-      const base = '/ATPComicManager/';
+      const cachePrefix = pagesAppCachePrefix(base);
       this.emitFile({ type: 'asset', fileName: 'missing-image.svg', source: readFileSync(new URL('../public/missing-image.svg', import.meta.url)) });
       const files = [...new Set([
         ...Object.keys(bundle),
@@ -46,7 +47,10 @@ export function pagesPlugin() {
       const template = readFileSync(new URL('../ui/src/platform/pwa/sw.js', import.meta.url), 'utf8').replace('/* SHARED_MODULES */', shared);
       const version = createHash('sha256').update(JSON.stringify(files)).update(template).digest('hex').slice(0, 12);
       const source = template
-        .replace('__APP_CACHE__', `atp-pages-app-${version}`).replace('__APP_FILES__', JSON.stringify(files));
+        .replace('__APP_CACHE__', `${cachePrefix}${version}`)
+        .replace('__APP_CACHE_PREFIX__', cachePrefix)
+        .replace('__ASSETS_DB_NAME__', pagesAssetsDatabaseName(base))
+        .replace('__APP_FILES__', JSON.stringify(files));
       this.emitFile({ type: 'asset', fileName: 'sw.js', source });
     }
   };

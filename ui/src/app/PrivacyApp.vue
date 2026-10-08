@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watchEffect } from 'vue';
 import { locale, t } from '../../../public/i18n.js';
+import { pagesLocalStorageKey } from '../../../public/pages-assets-db.js';
 import { privacyContent, privacyUpdated } from '../../../public/locales/privacy.js';
 import { appPath } from '../lib/navigation.js';
 import SettingsMenu from '../components/SettingsMenu.vue';
@@ -9,7 +10,7 @@ import { mdiChevronLeft } from '../lib/icons.js';
 
 const selectedLocale = ref(locale);
 function changeLocale(value) {
-  localStorage.setItem('comic-manager.locale', value);
+  localStorage.setItem(pagesLocalStorageKey(import.meta.env?.BASE_URL ?? '/', 'comic-manager.locale'), value);
   window.location.reload();
 }
 const text = (key) => t(key, {}, selectedLocale.value);

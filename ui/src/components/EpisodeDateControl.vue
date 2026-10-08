@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { mdiCalendarEditOutline, mdiCloseCircleOutline } from '../lib/icons.js';
 import { t } from '../../../public/i18n.js';
+import { pagesLocalStorageKey } from '../../../public/pages-assets-db.js';
 import MdiIcon from './MdiIcon.vue';
 
 const props = defineProps({
@@ -9,7 +10,7 @@ const props = defineProps({
   busy: { type: Boolean, default: false }
 });
 const emit = defineEmits(['save']);
-const LAST_DATE_KEY = 'atp-comic.last-episode-date';
+const LAST_DATE_KEY = pagesLocalStorageKey(import.meta.env?.BASE_URL ?? '/', 'atp-comic.last-episode-date');
 const open = ref(false);
 const draft = ref(props.modelValue);
 const manualDraft = ref('');

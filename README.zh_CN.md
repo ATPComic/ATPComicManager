@@ -105,9 +105,9 @@ npm run build
 
 ### GitHub Pages / PWA
 
-运行 `npm run build:pages`，再用 `npm run preview:pages` 在 `/ATPComicManager/` 预览静态应用。在支持目录访问的浏览器中导入分享 JSON，并授权图片目录。图片直接读取，缩略图按需生成。构建会强制仅同源的 `Content-Security-Policy`，网页版无法上传你的图库；可离线使用以确认。
+运行 `npm run build:pages`，再用 `npm run preview:pages` 在 `/ATPComicManager/` 预览静态应用。在支持目录访问的浏览器中导入分享 JSON，并授权图片目录。图片直接读取，缩略图按需生成。构建会强制仅同源的 `Content-Security-Policy`，网页版无法上传你的图库；可离线使用以确认。`develop` 分支发布在 `/ATPComicManager/develop/`；本地可用 `PAGES_BASE=/ATPComicManager/develop/ npm run build:pages` 构建该预览，再 `npm run preview:pages`。
 
-部署前，将仓库的 **Settings → Pages → Source** 设为 **GitHub Actions**。CI 在 Windows 和 Ubuntu 上检查两种构建；全部通过后，推送到 `main` 会部署 `dist-pages`，也可在 `main` 手动运行 CI。PR 仅执行检查。
+部署前，将仓库的 **Settings → Pages → Source** 设为 **GitHub Actions**。`pages.yml` 在每次推送到 `main` 或 `develop` 时都从 `main` 重建正式版，并在 `develop` 分支存在时把其预览发布到 `/ATPComicManager/develop/`。`ci.yml` 只在 Ubuntu 上校验（lint、测试及两种 Pages 构建），不执行部署；PR 仅执行校验。两个环境各自为 Service Worker 缓存、IndexedDB、OPFS 存储和偏好设置 key 加命名空间，预览不会影响正式数据。
 
 ### 图标源文件
 

@@ -27,6 +27,7 @@ import {
   tagCategoryStyle
 } from '../lib/tag-colors.js';
 import { locale, t } from '../../../public/i18n.js';
+import { pagesLocalStorageKey } from '../../../public/pages-assets-db.js';
 import { migrateTagMap, normalizeTagDefinition, relocateTagDefinition } from '../../../public/tag-model.js';
 import { createEmptyTagState } from '../../../public/tag-state.js';
 
@@ -200,7 +201,7 @@ async function saveTags() {
 
 function changeLocale(value) {
   return edits.leave(() => {
-    localStorage.setItem('comic-manager.locale', value);
+    localStorage.setItem(pagesLocalStorageKey(import.meta.env?.BASE_URL ?? '/', 'comic-manager.locale'), value);
     window.location.reload();
   });
 }

@@ -8,6 +8,7 @@ import MdiIcon from '../components/MdiIcon.vue';
 import { requestJson } from '../services/api.js';
 import { navigateToPage, returnFromPage } from '../lib/navigation.js';
 import { locale, t } from '../../../public/i18n.js';
+import { pagesLocalStorageKey } from '../../../public/pages-assets-db.js';
 
 const state = reactive({ library: { warnings: [] }, selectedType: null, errorsOnly: false });
 const selectedLocale = ref(locale);
@@ -115,7 +116,7 @@ function selectType(type) {
 }
 
 function changeLocale(value) {
-  localStorage.setItem('comic-manager.locale', value);
+  localStorage.setItem(pagesLocalStorageKey(import.meta.env?.BASE_URL ?? '/', 'comic-manager.locale'), value);
   window.location.reload();
 }
 

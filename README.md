@@ -105,11 +105,11 @@ If you would like to contribute a security review, these components and trust bo
 
 ### GitHub Pages / PWA
 
-Run `npm run build:pages`, then `npm run preview:pages` to test the static application at `/ATPComicManager/`. Choose an image folder in a browser supporting directory access. Configure recognition rules in **Library location**, or optionally import shared JSON to restore tags, collections and arrangements. Images are read directly, and thumbnails are generated and cached on demand. The build enforces a same-origin-only `Content-Security-Policy`, so the web version cannot send your library anywhere; you can confirm by running it offline.
+Run `npm run build:pages`, then `npm run preview:pages` to test the static application at `/ATPComicManager/`. Choose an image folder in a browser supporting directory access. Configure recognition rules in **Library location**, or optionally import shared JSON to restore tags, collections and arrangements. Images are read directly, and thumbnails are generated and cached on demand. The build enforces a same-origin-only `Content-Security-Policy`, so the web version cannot send your library anywhere; you can confirm by running it offline. The `develop` branch is published to `/ATPComicManager/develop/`; build that preview locally with `PAGES_BASE=/ATPComicManager/develop/ npm run build:pages`, then `npm run preview:pages`.
 
 While the application is visible, it checks for new files periodically and checks again when you return to it. Large folders use longer intervals to limit scanning overhead. **Rescan** refreshes the library manually. If folder access expires, **Restore access** requests permission again while preserving cached thumbnails.
 
-For deployment, set the repository's **Settings → Pages → Source** to **GitHub Actions**. The CI workflow validates both builds on Windows and Ubuntu. After both jobs pass, pushes to `main` deploy `dist-pages`; manual CI runs on `main` can also deploy. Pull requests only run validation.
+For deployment, set the repository's **Settings → Pages → Source** to **GitHub Actions**. `.github/workflows/pages.yml` rebuilds the canonical app from `main` on every push to `main` or `develop` and, when a `develop` branch exists, also publishes its preview to `/ATPComicManager/develop/`. `.github/workflows/ci.yml` only validates on Ubuntu (lint, tests, and both Pages builds) and never deploys; pull requests run validation only. Both environments namespace their service worker cache, IndexedDB, OPFS storage and preference keys, so a preview never touches released data.
 
 ### Icon sources
 

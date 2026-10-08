@@ -1,0 +1,111 @@
+name: Pages
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  # A develop branch is optional. Building the preview is skipped until it
+  # exists so the canonical site keeps deploying from main without a red run.
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      develop: ${{ steps.check.outputs.develop }}
+    steps:
+      - name: Detect develop branch
+        id: check
+        run: |
+          if git ls-remote --exit-code --heads "https://github.com/${{ github.repository }}.git" develop >/dev/null 2>&1; then
+            echo "develop=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "develop=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The canonical app is always rebuilt from main, so a deploy can never be
+  # left without production or with a stale production build.
+  build-prod:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build:pages
+      - run: node --check dist-pages/sw.js
+      - run: node scripts/check-pages-build.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pages-prod
+          path: dist-pages
+
+  build-develop:
+    needs: preflight
+    if: needs.preflight.outputs.develop == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build develop preview
+        env:
+          PAGES_BASE: /ATPComicManager/develop/
+        run: npm run build:pages
+      - name: Verify develop preview
+        env:
+          PAGES_BASE: /ATPComicManager/develop/
+        run: |
+          node --check dist-pages/sw.js
+          node scripts/check-pages-build.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pages-develop
+          path: dist-pages
+
+  deploy:
+    needs: [build-prod, build-develop]
+    if: ${{ always() && needs.build-prod.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download production site
+        uses: actions/download-artifact@v4
+        with:
+          name: pages-prod
+          path: site
+      - name: Download develop preview
+        if: needs.build-develop.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: pages-develop
+          path: site/develop
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

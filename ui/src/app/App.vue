@@ -61,8 +61,9 @@ import { flattenTagDefinitions, getOrderedTagEntries } from '../../../public/tag
 import { createEmptyTagState, mergeTagMaps } from '../../../public/tag-state.js';
 import { createEmptyRecognitionState } from '../../../public/recognition-state.js';
 import { getVirtualWindow } from '../../../public/virtual-list.js';
+import { pagesLocalStorageKey } from '../../../public/pages-assets-db.js';
 
-const READER_SETTINGS_KEY = 'comic-manager.reader-settings';
+const READER_SETTINGS_KEY = pagesLocalStorageKey(import.meta.env?.BASE_URL ?? '/', 'comic-manager.reader-settings');
 const layoutLabel = layout => t(({ 'month-flat': 'layoutMonthly', folder: 'layoutDaily', 'rule-folder': 'layoutCustom' })[layout] ?? 'layoutUnknown');
 const ROW_HEIGHT = 100;
 const COLLECTION_PREVIEW_LIMIT = 8;
@@ -812,7 +813,7 @@ function saveReaderSettings() {
 }
 
 function changeLocale(value) {
-  localStorage.setItem('comic-manager.locale', value);
+  localStorage.setItem(pagesLocalStorageKey(import.meta.env?.BASE_URL ?? '/', 'comic-manager.locale'), value);
   window.location.reload();
 }
 

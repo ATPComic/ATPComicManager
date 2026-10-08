@@ -1,4 +1,6 @@
 const APP_CACHE = '__APP_CACHE__';
+const APP_CACHE_PREFIX = '__APP_CACHE_PREFIX__';
+const ASSETS_DB_NAME = '__ASSETS_DB_NAME__';
 const APP_FILES = __APP_FILES__;
 
 /* SHARED_MODULES */
@@ -9,7 +11,7 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
-    for (const name of await caches.keys()) if (name.startsWith('atp-pages-app-') && name !== APP_CACHE) await caches.delete(name);
+    for (const name of await caches.keys()) if (name.startsWith(APP_CACHE_PREFIX) && name !== APP_CACHE) await caches.delete(name);
     await self.clients.claim();
   })());
 });
@@ -21,7 +23,7 @@ let lastFileError = 0;
 let assetOpener;
 const validatedThumbnails = new Map();
 
-const openAssets = () => (assetOpener ??= createAssetsDbOpener(indexedDB))();
+const openAssets = () => (assetOpener ??= createAssetsDbOpener(indexedDB, ASSETS_DB_NAME))();
 
 function validationTime(key, cached) {
   if (!validatedThumbnails.has(key)) {

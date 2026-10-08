@@ -1,8 +1,8 @@
-import { createAssetsDbOpener, PAGES_ASSETS_DB } from '../../../../public/pages-assets-db.js';
+import { createAssetsDbOpener, PAGES_ASSETS_DB, pagesAssetsDatabaseName } from '../../../../public/pages-assets-db.js';
 
 let opener;
 
-const open = () => (opener ??= createAssetsDbOpener(indexedDB))();
+const open = () => (opener ??= createAssetsDbOpener(indexedDB, pagesAssetsDatabaseName(import.meta.env?.BASE_URL ?? '/')))();
 
 export async function assetStore(key, value) {
   const db = await open();

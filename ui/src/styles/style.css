@@ -215,7 +215,7 @@ button, input { font: inherit; }
 .danger-action { color: var(--danger) !important; }
 .collection-tag-row { min-height: 40px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 16px 8px; }
 .muted { color: var(--muted); font-size: 12px; }
-.filter-row { position: relative; flex: 0 0 auto; display: grid; grid-template-columns: minmax(180px, 1fr) minmax(160px, 220px) 132px; align-items: center; gap: 8px; padding: 6px 16px 10px; }
+.filter-row { position: relative; flex: 0 0 auto; display: grid; grid-template-columns: minmax(110px, 1fr) minmax(104px, 176px) 112px minmax(104px, 144px); align-items: center; gap: 8px; padding: 6px 16px 10px; }
 .compact-input, .emoji-input { min-width: 0; --field-decorator-line-border-radius: 999px; }
 .compact-input .var-field-decorator, .compact-input .var-field-decorator__controller,
 .compact-input .var-field-decorator__line { border-radius: 999px !important; }
@@ -303,11 +303,10 @@ button, input { font: inherit; }
 }
 .tag-choice-check { flex: 0 0 auto; margin-right: 4px; }
 
-.episode-scroll { min-height: 0; flex: 1; overflow: auto; contain: strict; }
+.episode-scroll { min-height: 0; flex: 1; overflow: auto; contain: strict; transition: background-color 120ms ease; }
+.episode-scroll.reordering { background: color-mix(in srgb, var(--primary) 8%, transparent); }
 .virtual-canvas { position: relative; width: 100%; }
-.drop-indicator { position: absolute; z-index: 5; left: 16px; right: 16px; height: 3px; border-radius: 999px; background: var(--primary); box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent); pointer-events: none; }
-.drop-indicator::before { content: ""; position: absolute; left: -4px; top: -4px; width: 11px; height: 11px; border-radius: 50%; background: var(--primary); }
-.drop-indicator span { position: absolute; right: 0; bottom: 7px; padding: 3px 8px; border-radius: 999px; color: #061a3b; background: var(--primary); font-size: 10px; font-weight: 650; }
+.episode-insert-line { position: absolute; z-index: 5; left: 16px; right: 16px; height: 3px; border-radius: 9999px; background: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent); pointer-events: none; }
 .episode-row {
   position: absolute;
   inset: 4px 16px auto;
@@ -923,6 +922,7 @@ button, input { font: inherit; }
     padding: 4px 8px 8px;
   }
   .filter-row > :first-child { grid-column: 1 / -1; }
+  .filter-row > .sort-filter-control { grid-column: 1 / -1; }
   .compact-input .var-field-decorator__controller, .query-filter-trigger { min-height: 40px; height: 40px !important; }
 
   .tag-filter-panel {
@@ -965,7 +965,7 @@ button, input { font: inherit; }
     padding: 10px;
     border-radius: 14px;
   }
-  .episode-row > .drag-handle { display: none; }
+  .episode-row > .drag-handle.mdi-icon { display: none; }
   .episode-row .order-number {
     position: absolute;
     z-index: 2;
@@ -983,7 +983,7 @@ button, input { font: inherit; }
   .episode-supporting { display: none; }
   .episode-actions { position: absolute; right: 8px; bottom: 7px; gap: 0; }
   .episode-actions .var-button { width: 36px !important; min-width: 36px !important; height: 36px !important; padding: 0 !important; }
-  .drop-indicator { left: 8px; right: 8px; }
+  .episode-insert-line { left: 8px; right: 8px; }
 
   .tag-page-workspace { height: calc(100dvh - var(--titlebar-height)); padding: 12px max(10px, env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
   .tag-page-intro { align-items: flex-start; margin-bottom: 12px; }
@@ -1202,6 +1202,7 @@ button, input { font: inherit; }
     padding: 4px 8px 8px;
   }
   .filter-row > :first-child { grid-column: 1 / -1; }
+  .filter-row > .sort-filter-control { grid-column: 1 / -1; }
   .active-tag-filters { overflow-x: auto; flex-wrap: nowrap; padding-inline: 8px; scrollbar-width: none; }
   .active-tag-filters::-webkit-scrollbar { display: none; }
   .episode-scroll { padding-bottom: env(safe-area-inset-bottom); }
@@ -1213,7 +1214,7 @@ button, input { font: inherit; }
     border-radius: 12px;
     cursor: pointer;
   }
-  .episode-row > .drag-handle, .episode-row .order-number, .episode-actions, .episode-supporting { display: none; }
+  .episode-row > .drag-handle.mdi-icon, .episode-actions, .episode-supporting { display: none; }
   .thumb-pair { width: 72px; height: 72px; }
   .episode-copy { align-self: stretch; justify-content: center; padding: 0; }
   .episode-title strong { font-size: 15px; }

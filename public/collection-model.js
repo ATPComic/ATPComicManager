@@ -97,3 +97,34 @@ export function compareEpisodesByDate([leftId, left], [rightId, right]) {
   if (rightDate) return 1;
   return String(left?.title ?? leftId).localeCompare(String(right?.title ?? rightId), undefined, { numeric: true });
 }
+
+export const EPISODE_SORT_DATE_ASC = 'date-asc';
+
+export const EPISODE_SORT_DATE_DESC = 'date-desc';
+
+export const EPISODE_SORT_MANUAL = 'manual';
+
+export function sortEpisodeIds(episodeIds, episodes = {}, mode = EPISODE_SORT_MANUAL) {
+  // Manual order is whatever the caller supplied (a collection's stored episode list).
+  const ids = [...(episodeIds ?? [])];
+  if (mode === EPISODE_SORT_DATE_ASC) {
+    return ids.sort((left, right) => compareEpisodesByDate([left, episodes?.[left]], [right, episodes?.[right]]));
+  }
+  if (mode === EPISODE_SORT_DATE_DESC) {
+    return ids.sort((left, right) => compareEpisodesByDate([right, episodes?.[right]], [left, episodes?.[left]]));
+  }
+  return ids;
+}
+
+export function rowInsertionIndex(rows, pointerY, total) {
+  // Mirrors the Variant assignment drag: compare the pointer with each row's
+  // midpoint to find the nearest insertion boundary before it.
+  const list = rows ?? [];
+  for (const row of list) {
+    if (pointerY < row.top + row.height / 2) {
+      return Math.max(0, Math.min(total, Number(row.index) || 0));
+    }
+  }
+  const last = list.length ? Number(list[list.length - 1].index) || 0 : -1;
+  return Math.max(0, Math.min(total, last + 1));
+}

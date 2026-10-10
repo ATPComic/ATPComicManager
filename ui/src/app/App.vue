@@ -45,6 +45,7 @@ import TagAssignmentPicker from '../components/TagChipPicker.vue';
 import TagDisplayChip from '../components/TagDisplayChip.vue';
 import TagFilterControl from '../components/TagFilterControl.vue';
 import DateFilterControl from '../components/DateFilterControl.vue';
+import SortControl from '../components/SortControl.vue';
 import EpisodeDateControl from '../components/EpisodeDateControl.vue';
 import { chooseAndroidLibrary, isAndroidApp, isPagesApp, nativeAssetUrl, requestJson } from '../services/api.js';
 import SettingsMenu from '../components/SettingsMenu.vue';
@@ -52,7 +53,7 @@ import { downloadJsonFile } from '../lib/download.js';
 import { cloneData } from '../lib/clone-data.js';
 import { navigateToPage, returnPathFromHref, variantEpisodePath } from '../lib/navigation.js';
 import { tagCategoryStyle as getTagCategoryStyle } from '../lib/tag-colors.js';
-import { EPISODE_DRAG_TYPE, draggedEpisodeId, compareEpisodesByDate, countTagEpisodes, matchesDateFilter, matchesTagFilter, moveItemToSlot } from '../../../public/collection-model.js';
+import { EPISODE_DRAG_TYPE, EPISODE_SORT_DATE_ASC, EPISODE_SORT_MANUAL, draggedEpisodeId, compareEpisodesByDate, countTagEpisodes, matchesDateFilter, matchesTagFilter, moveItemToSlot, sortEpisodeIds, rowInsertionIndex } from '../../../public/collection-model.js';
 import { locale, t } from '../../../public/i18n.js';
 import { ComicReader } from '../../../public/reader.js';
 import { getThumbnailUrl, setReaderAssetUrlResolver } from '../../../public/reader-model.js';
@@ -260,15 +261,20 @@ const tagEpisodeCounts = computed(() => countTagEpisodes(
 ));
 
 const reverseCollections = ref(false);
-const reverseEpisodes = ref(false);
-const displayedThemes = computed(() => reverseCollections.value ? [...state.themes].reverse() : state.themes);
-const filteredEpisodeIds = computed(() => {
-  const ids = filterScopeEpisodeIds.value.filter((episodeId) => (
-  matchesTagFilter(state.tags.episodeTags[episodeId], state.tagFilters, state.tags.categories)
-  && matchesDateFilter(episodeId, state.library.episodes[episodeId], state.dateFilter)
-));
-  return reverseEpisodes.value ? ids.reverse() : ids;
+const sortMode = ref(EPISODE_SORT_MANUAL);
+const effectiveSortMode = computed({
+  get: () => ((activeTheme.value || sortMode.value !== EPISODE_SORT_MANUAL) ? sortMode.value : EPISODE_SORT_DATE_ASC),
+  set: (value) => { sortMode.value = value; }
 });
+const displayedThemes = computed(() => reverseCollections.value ? [...state.themes].reverse() : state.themes);
+const filteredEpisodeIds = computed(() => sortEpisodeIds(
+  filterScopeEpisodeIds.value.filter((episodeId) => (
+    matchesTagFilter(state.tags.episodeTags[episodeId], state.tagFilters, state.tags.categories)
+    && matchesDateFilter(episodeId, state.library.episodes[episodeId], state.dateFilter)
+  )),
+  state.library.episodes,
+  sortMode.value
+));
 
 const visibleRows = computed(() => {
   const { start, end } = getVirtualWindow(
@@ -295,7 +301,7 @@ const selectedTagFilters = computed(() => orderedTagItems(state.tagFilters).map(
 
 const hasActiveTagFilters = computed(() => selectedTagFilters.value.length > 0);
 
-const canReorder = computed(() => !!activeTheme.value && !reverseEpisodes.value && !state.search.trim() && !hasActiveTagFilters.value);
+const canReorder = computed(() => sortMode.value === EPISODE_SORT_MANUAL && !!activeTheme.value && !state.search.trim() && !hasActiveTagFilters.value);
 const hasCollectionTags = computed(() => !!Object.keys(activeTheme.value?.tags ?? {}).length);
 const localeOptions = computed(() => [
   { label: t('languageEnglish'), value: 'en' },
@@ -327,6 +333,11 @@ function thumbIndexes(episode) {
 function resetListScroll() {
   scrollTop.value = 0;
   if (listRef.value) listRef.value.scrollTop = 0;
+}
+
+function changeSortMode() {
+  dropIndex.value = null;
+  resetListScroll();
 }
 
 function capturePaneScroll() {
@@ -404,11 +415,15 @@ function onListScroll(event) {
   });
 }
 
+function sortedCollectionIds(episodeIds) {
+  return sortEpisodeIds(episodeIds, state.library.episodes, sortMode.value);
+}
+
 function readerSequence(currentEpisodeId) {
   const theme = (activeTheme.value?.episodes ?? []).includes(currentEpisodeId)
     ? activeTheme.value
     : state.themes.find((candidate) => (candidate.episodes ?? []).includes(currentEpisodeId));
-  return theme?.episodes?.filter((id) => state.library.episodes[id]) ?? episodeIds();
+  return sortedCollectionIds(theme?.episodes?.filter((id) => state.library.episodes[id]) ?? episodeIds());
 }
 
 function readerCollection(currentEpisodeId) {
@@ -416,7 +431,7 @@ function readerCollection(currentEpisodeId) {
     ? activeTheme.value
     : state.themes.find((candidate) => (candidate.episodes ?? []).includes(currentEpisodeId));
   return theme
-    ? { title: theme.title, episodes: theme.episodes.filter((id) => state.library.episodes[id]) }
+    ? { title: theme.title, episodes: sortedCollectionIds(theme.episodes.filter((id) => state.library.episodes[id])) }
     : null;
 }
 
@@ -700,6 +715,13 @@ function onThemeDragLeave(theme, event) {
   dropThemeTitle.value = null;
 }
 
+function episodeRows() {
+  return [...(listRef.value?.querySelectorAll('.episode-row[data-episode-index]') ?? [])].map((row) => {
+    const rect = row.getBoundingClientRect();
+    return { index: Number(row.dataset.episodeIndex), top: rect.top, height: rect.height };
+  });
+}
+
 function onListDragOver(event) {
   if (!canReorder.value || !state.draggedEpisodeId || !listRef.value) return;
   const rect = listRef.value.getBoundingClientRect();
@@ -710,8 +732,7 @@ function onListDragOver(event) {
     listRef.value.scrollTop += Math.max(8, (event.clientY - (rect.bottom - edge)) * 0.32);
   }
   scrollTop.value = listRef.value.scrollTop;
-  const contentY = event.clientY - rect.top + listRef.value.scrollTop;
-  dropIndex.value = Math.max(0, Math.min(filteredEpisodeIds.value.length, Math.round(contentY / ROW_HEIGHT)));
+  dropIndex.value = rowInsertionIndex(episodeRows(), event.clientY, filteredEpisodeIds.value.length);
 }
 
 async function dropAtIndex(event) {
@@ -1010,7 +1031,6 @@ onBeforeUnmount(() => {
           <div class="episode-heading-title"><span class="overline">{{ t('episodesOverline') }}</span><h2>{{ collectionTitle }}</h2></div>
           <var-badge class="episode-total" :value="filteredEpisodeIds.length" :max-value="9999" type="info" />
           <div class="episode-heading-actions">
-            <var-button text round :aria-label="pagesText('reverse')" :title="pagesText('reverse')" :aria-pressed="reverseEpisodes" @click="reverseEpisodes = !reverseEpisodes; dropIndex = null"><MdiIcon :path="mdiArrowDown" :style="{ transform: reverseEpisodes ? 'rotate(180deg)' : '' }" /></var-button>
             <var-button-group v-if="activeTheme" mode="outline" size="small" :elevation="false" class="collection-actions">
               <var-button outline :title="t('editCollectionTags')" :aria-label="t('editCollectionTags')" @click="openTagAssignment('collection', activeTheme.title)"><MdiIcon :path="mdiTagOutline" /></var-button>
               <var-button outline :class="{ 'is-muted-action': !hasCollectionTags }" :title="hasCollectionTags ? t('applyCollectionTags') : t('collectionNoTags')" :aria-label="t('applyCollectionTags')" @click="applyCollectionTags"><MdiIcon :path="mdiTagArrowDownOutline" /></var-button>
@@ -1043,6 +1063,7 @@ onBeforeUnmount(() => {
             @change="resetListScroll"
           />
           <DateFilterControl v-model="state.dateFilter" @change="resetListScroll" />
+          <SortControl v-model="effectiveSortMode" :manual-available="!!activeTheme" @change="changeSortMode" />
         </div>
         <div v-if="selectedTagFilters.length" class="active-tag-filters" :aria-label="t('activeTagFilters')">
           <TagDisplayChip
@@ -1056,20 +1077,22 @@ onBeforeUnmount(() => {
           />
         </div>
 
-        <div ref="listRef" class="episode-scroll" @scroll="onListScroll" @dragover.prevent="onListDragOver" @drop.prevent="dropAtIndex">
+        <div ref="listRef" class="episode-scroll" :class="{ reordering: canReorder && state.draggedEpisodeId }" @scroll="onListScroll" @dragover.prevent="onListDragOver" @drop.prevent="dropAtIndex">
           <PageSkeleton v-if="pageLoading" />
           <div v-if="filteredEpisodeIds.length" class="virtual-canvas" :style="{ height: `${filteredEpisodeIds.length * ROW_HEIGHT + (canReorder ? 22 : 0)}px` }">
-            <div v-if="canReorder && dropIndex != null" class="drop-indicator" :style="{ top: `${dropIndex * ROW_HEIGHT}px` }"><span>{{ t('dropHere') }}</span></div>
+            <div v-if="canReorder && state.draggedEpisodeId && dropIndex != null" class="episode-insert-line" :style="{ top: `${dropIndex * ROW_HEIGHT}px` }"></div>
             <article
               v-for="row in visibleRows"
               :key="row.episodeId"
               v-ripple
               class="episode-row"
               :class="{ ordered: !!activeTheme, selected: state.selectedEpisodeId === row.episodeId, dragging: state.draggedEpisodeId === row.episodeId }"
+              :data-episode-index="row.index"
               :style="{ transform: `translateY(${row.index * ROW_HEIGHT}px)` }"
               :draggable="!touchUi && !touchGesture"
               @pointerdown="touchGesture = $event.pointerType !== 'mouse'"
-              @pointercancel="onDragEnd"
+              @pointerup="touchGesture = false"
+              @pointercancel="touchGesture = false"
               @contextmenu="touchUi || touchGesture ? $event.preventDefault() : undefined"
               @click="selectEpisodeFromClick(row.episodeId)"
               @dblclick="openReader(row.episodeId)"

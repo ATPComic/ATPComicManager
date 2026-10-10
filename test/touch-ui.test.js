@@ -23,6 +23,9 @@ test('touch selection and child expansion use separate buttons and avoid native 
   assert.match(tree, /@click\.stop="emit\('select', node.id\)"/);
   const app = await readFile(new URL('../ui/src/app/App.vue', import.meta.url), 'utf8');
   assert.match(app, /:draggable="!touchUi && !touchGesture"/);
+  // Native drags fire pointercancel right after dragstart; it must not clear
+  // the in-list reorder state or the drop indicator never appears.
+  assert.doesNotMatch(app, /@pointercancel="onDragEnd/);
   const filter = await readFile(new URL('../ui/src/components/TagFilterControl.vue', import.meta.url), 'utf8');
   assert.match(filter, /var-popup v-if="touch"/);
   assert.match(filter, /position="bottom"/);

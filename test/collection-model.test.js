@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { compareEpisodesByDate, countTagEpisodes, getEpisodeDate, matchesDateFilter, matchesTagFilter, moveItemToSlot } from '../public/collection-model.js';
+import { compareEpisodesByDate, countTagEpisodes, getEpisodeDate, matchesDateFilter, matchesTagFilter, moveItemToSlot, EPISODE_SORT_DATE_ASC, EPISODE_SORT_DATE_DESC, EPISODE_SORT_MANUAL, rowInsertionIndex, sortEpisodeIds } from '../public/collection-model.js';
 
 test('episode tag filter matches a category and value pair', () => {
   const tags = { people: ['Alice', 'Bob'], style: ['Ink'] };
@@ -57,4 +57,31 @@ test('date filters support year, month, and day ranges including assigned folder
   assert.equal(matchesDateFilter('folder:x', {}, { granularity: 'day', start: '2020-01-01', end: '' }), false);
   const sorted = [['folder:x', {}], ['20240517', {}], ['folder:y', { date: '2023-01-01' }]].sort(compareEpisodesByDate);
   assert.deepEqual(sorted.map(([id]) => id), ['folder:y', '20240517', 'folder:x']);
+});
+
+test('episode sorting supports date ascending, date descending, and manual order', () => {
+  const episodes = {
+    '20240101': { date: '2024-01-01' },
+    '20240301': { date: '2024-03-01' },
+    '20240201': { date: '2024-02-01' }
+  };
+  const ids = ['20240301', '20240101', '20240201'];
+  assert.deepEqual(sortEpisodeIds(ids, episodes, EPISODE_SORT_DATE_ASC), ['20240101', '20240201', '20240301']);
+  assert.deepEqual(sortEpisodeIds(ids, episodes, EPISODE_SORT_DATE_DESC), ['20240301', '20240201', '20240101']);
+  assert.deepEqual(sortEpisodeIds(ids, episodes, EPISODE_SORT_MANUAL), ids);
+  assert.deepEqual(ids, ['20240301', '20240101', '20240201']);
+});
+
+test('row insertion follows pointer midpoints and survives a virtual window', () => {
+  const rows = [
+    { index: 0, top: 4, height: 92 },
+    { index: 1, top: 104, height: 92 },
+    { index: 2, top: 204, height: 92 }
+  ];
+  assert.equal(rowInsertionIndex(rows, 30, 3), 0);
+  assert.equal(rowInsertionIndex(rows, 60, 3), 1);
+  assert.equal(rowInsertionIndex(rows, 160, 3), 2);
+  assert.equal(rowInsertionIndex(rows, 300, 3), 3);
+  assert.equal(rowInsertionIndex([], 300, 3), 0);
+  assert.equal(rowInsertionIndex([{ index: 5, top: 504, height: 92 }, { index: 6, top: 604, height: 92 }], 900, 10), 7);
 });

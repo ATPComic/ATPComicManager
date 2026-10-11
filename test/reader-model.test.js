@@ -1,18 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  computePageBox,
   createEpisodeReaderModel,
   findNearestPageEntry,
   findPageEntry,
   getAdjacentEntry,
   getImageUrl,
+  getLogicalPageStep,
   getPageSideDirection,
   getPeekTargetVariant,
   getSequencePosition,
   getThumbnailUrl,
   getNextVariant,
   getWheelIntent,
+  isHorizontalReadingOrder,
+  normalizePageFit,
   normalizePeekSettings,
+  normalizeReaderPreferences,
+  normalizeReadingMode,
+  normalizeReadingOrder,
   resolvePeekTarget,
   setReaderAssetUrlResolver
 } from '../public/reader-model.js';
@@ -190,4 +197,50 @@ test('peek settings have stable defaults and safe bounds', () => {
   assert.deepEqual(normalizePeekSettings({ radius: 160.4, feather: 28.2, animationSpeed: 175 }), { radius: 160, feather: 28, animationSpeed: 175 });
   assert.deepEqual(normalizePeekSettings({ radius: 10, feather: 80, animationSpeed: 5 }), { radius: 24, feather: 24, animationSpeed: 25 });
   assert.deepEqual(normalizePeekSettings({ radius: 9999, feather: -5, animationSpeed: 900 }), { radius: 600, feather: 0, animationSpeed: 300 });
+});
+
+test('reader preferences default to single page, left-to-right, whole-page fit and animation', () => {
+  assert.deepEqual(normalizeReaderPreferences(), { mode: 'single', order: 'ltr', fit: 'screen', pageAnimation: true });
+  assert.deepEqual(normalizeReaderPreferences({ mode: 'focus', order: 'ttb', fit: 'fill', pageAnimation: false }), { mode: 'focus', order: 'ttb', fit: 'fill', pageAnimation: false });
+  assert.deepEqual(normalizeReaderPreferences({ mode: 'bogus', order: 'sideways', fit: 'nope' }), { mode: 'single', order: 'ltr', fit: 'screen', pageAnimation: true });
+});
+
+test('page fit normalizes invalid values to whole page', () => {
+  assert.equal(normalizePageFit('fill'), 'fill');
+  assert.equal(normalizePageFit('screen'), 'screen');
+  assert.equal(normalizePageFit('nope'), 'screen');
+});
+
+test('page boxes contain by default and fill the reading cross axis when asked', () => {
+  const viewport = { viewportWidth: 1000, viewportHeight: 800 };
+  // screen contains a portrait page by height, a landscape page by width.
+  assert.deepEqual(computePageBox({ aspect: 0.5, fit: 'screen', order: 'ltr', ...viewport }), { width: 400, height: 800 });
+  assert.deepEqual(computePageBox({ aspect: 2, fit: 'screen', order: 'ltr', ...viewport }), { width: 1000, height: 500 });
+  // fill + left/right fills height, width follows the aspect ratio.
+  assert.deepEqual(computePageBox({ aspect: 0.5, fit: 'fill', order: 'ltr', ...viewport }), { width: 400, height: 800 });
+  // fill + top/bottom fills width, height follows the aspect ratio.
+  assert.deepEqual(computePageBox({ aspect: 0.5, fit: 'fill', order: 'ttb', ...viewport }), { width: 1000, height: 2000 });
+});
+
+test('reading modes and orders normalize invalid values', () => {
+  assert.equal(normalizeReadingMode('continuous'), 'continuous');
+  assert.equal(normalizeReadingMode('focus'), 'focus');
+  assert.equal(normalizeReadingMode('nope'), 'single');
+  assert.equal(normalizeReadingOrder('rtl'), 'rtl');
+  assert.equal(normalizeReadingOrder('ttb'), 'ttb');
+  assert.equal(normalizeReadingOrder('nope'), 'ltr');
+});
+
+test('reading order decides the horizontal axis and logical page step', () => {
+  assert.equal(isHorizontalReadingOrder('ltr'), true);
+  assert.equal(isHorizontalReadingOrder('rtl'), true);
+  assert.equal(isHorizontalReadingOrder('ttb'), false);
+
+  assert.equal(getLogicalPageStep('ltr', 1), 1);
+  assert.equal(getLogicalPageStep('ltr', -1), -1);
+  assert.equal(getLogicalPageStep('rtl', 1), -1);
+  assert.equal(getLogicalPageStep('rtl', -1), 1);
+  assert.equal(getLogicalPageStep('ttb', 1), 1);
+  assert.equal(getLogicalPageStep('ttb', -1), -1);
+  assert.equal(getLogicalPageStep('ltr', 0), 0);
 });

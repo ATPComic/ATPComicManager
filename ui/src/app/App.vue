@@ -108,7 +108,22 @@ const nameDraft = ref('');
 const settingsDialogOpen = ref(false);
 const recognitionDialogOpen = ref(false);
 const recognitionDraft = reactive({ version: 1, rules: [], episodeDates: {}, identityMarkers: [] });
-const settingsDraft = reactive({ radius: 144, feather: 32, animationSpeed: 100 });
+const settingsDraft = reactive({ radius: 144, feather: 32, animationSpeed: 100, mode: 'single', order: 'ltr', fit: 'screen', pageAnimation: true });
+const readerModeOptions = [
+  { label: t('readerModeSingle'), value: 'single', ripple: true },
+  { label: t('readerModeContinuous'), value: 'continuous', ripple: true },
+  { label: t('readerModeFocus'), value: 'focus', ripple: true }
+];
+const readerOrderOptions = [
+  { label: t('readingOrderLtr'), value: 'ltr', ripple: true },
+  { label: t('readingOrderRtl'), value: 'rtl', ripple: true },
+  { label: t('readingOrderTtb'), value: 'ttb', ripple: true }
+];
+const readerFitOptions = [
+  { label: t('pageFitScreen'), value: 'screen', ripple: true },
+  { label: t('pageFitFill'), value: 'fill', ripple: true }
+];
+const lastPointerWasTouch = ref(false);
 const selectedLocale = ref(locale);
 const dropIndex = ref(null);
 const dropThemeTitle = ref(null);
@@ -385,11 +400,17 @@ function selectCollectionFromClick(title = null, unassignedOnly = false) {
 
 function selectEpisodeFromClick(episodeId) {
   if (performance.now() < suppressEpisodeClickUntil) return;
-  if (portraitReaderMode.matches) {
+  if (portraitReaderMode.matches || lastPointerWasTouch.value) {
     openReader(episodeId);
     return;
   }
   state.selectedEpisodeId = episodeId;
+}
+
+function markPointerType(event) {
+  const isTouch = event.pointerType !== 'mouse';
+  touchGesture.value = isTouch;
+  lastPointerWasTouch.value = isTouch;
 }
 
 function closeMobileCollection() {
@@ -822,15 +843,15 @@ async function applyCollectionTags() {
 }
 
 function openReaderSettings() {
-  Object.assign(settingsDraft, reader.getPeekSettings());
+  Object.assign(settingsDraft, reader.getReaderSettings());
   settingsDialogOpen.value = true;
 }
 
 function saveReaderSettings() {
-  const settings = reader.setPeekSettings(settingsDraft);
+  const settings = reader.setReaderSettings(settingsDraft);
   localStorage.setItem(READER_SETTINGS_KEY, JSON.stringify(settings));
   Object.assign(settingsDraft, settings);
-  notify(t('savedPeek'));
+  notify(t('savedReaderSettings'));
 }
 
 function changeLocale(value) {
@@ -1090,7 +1111,7 @@ onBeforeUnmount(() => {
               :data-episode-index="row.index"
               :style="{ transform: `translateY(${row.index * ROW_HEIGHT}px)` }"
               :draggable="!touchUi && !touchGesture"
-              @pointerdown="touchGesture = $event.pointerType !== 'mouse'"
+              @pointerdown="markPointerType($event)"
               @pointerup="touchGesture = false"
               @pointercancel="touchGesture = false"
               @contextmenu="touchUi || touchGesture ? $event.preventDefault() : undefined"
@@ -1225,13 +1246,32 @@ onBeforeUnmount(() => {
 
     <var-dialog
       v-model:show="settingsDialogOpen"
-      :title="t('peekSettings')"
+      :title="t('readerSettings')"
       :confirm-button-text="t('save')"
       :cancel-button-text="t('cancel')"
       cancel-button
       @confirm="saveReaderSettings"
     >
-      <div class="settings-grid">
+      <div class="settings-grid reader-settings">
+        <div class="settings-field">
+          <span class="settings-label">{{ t('readingMode') }}</span>
+          <var-segmented-buttons :model-value="settingsDraft.mode" :options="readerModeOptions" :checkmark="false" size="small" @update:model-value="settingsDraft.mode = $event" />
+        </div>
+        <div class="settings-field">
+          <span class="settings-label">{{ t('readingOrder') }}</span>
+          <var-segmented-buttons :model-value="settingsDraft.order" :options="readerOrderOptions" :checkmark="false" size="small" @update:model-value="settingsDraft.order = $event" />
+        </div>
+        <div v-if="settingsDraft.mode === 'continuous'" class="settings-field">
+          <span class="settings-label">{{ t('pageFit') }}</span>
+          <var-segmented-buttons :model-value="settingsDraft.fit" :options="readerFitOptions" :checkmark="false" size="small" @update:model-value="settingsDraft.fit = $event" />
+          <small>{{ t('pageFitHelp') }}</small>
+        </div>
+        <div class="settings-field settings-switch">
+          <span class="settings-label">{{ t('pageAnimation') }}</span>
+          <var-switch v-model="settingsDraft.pageAnimation" />
+          <small>{{ t('pageAnimationHelp') }}</small>
+        </div>
+        <div class="settings-divider">{{ t('peekSettings') }}</div>
         <div class="settings-field">
           <var-input v-model="settingsDraft.radius" class="compact-input" type="number" size="small" variant="outlined" :is-show-form-details="false" :placeholder="t('defaultRadius')" />
           <small>{{ t('radiusHelp') }}</small>
@@ -1268,7 +1308,7 @@ onBeforeUnmount(() => {
           <template #left>
             <div class="reader-peek-controls">
               <var-button size="small" text data-reader-peek-toggle class="reader-text-action is-active"><MdiIcon :path="mdiSelectionEllipse" />{{ t('peek') }}</var-button>
-              <var-button size="small" round text data-reader-settings :aria-label="t('peekSettings')" @click="openReaderSettings"><MdiIcon :path="mdiCogOutline" /></var-button>
+              <var-button size="small" round text data-reader-settings :aria-label="t('readerSettings')" @click="openReaderSettings"><MdiIcon :path="mdiCogOutline" /></var-button>
             </div>
           </template>
         </ReaderVariants>
@@ -1288,10 +1328,7 @@ onBeforeUnmount(() => {
       <div class="reader-stage">
         <ReaderSlider ref="episodeSliderRef" class="reader-episode-progress" :icon-path="mdiBookMultipleOutline" :aria-label="t('episodeProgress')" hidden @input="reader?.openCollectionEpisode($event - 1)" />
         <div class="reader-viewport" data-reader-viewport>
-          <div class="reader-plane" data-reader-plane>
-            <img class="reader-image" data-reader-image alt="" draggable="false">
-            <img class="reader-image reader-peek" data-reader-peek alt="" draggable="false">
-          </div>
+          <div class="reader-plane" data-reader-plane></div>
           <span class="reader-edge-cue reader-edge-prev" aria-hidden="true"><MdiIcon :path="mdiChevronLeft" size="32" /></span>
           <span class="reader-edge-cue reader-edge-next" aria-hidden="true"><MdiIcon :path="mdiChevronRight" size="32" /></span>
           <var-fab class="reader-tag-fab" :fixed="false" position="right-bottom" :teleport="false" :bottom="22" :right="22">

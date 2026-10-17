@@ -12,7 +12,7 @@ const props = defineProps({
 const emit = defineEmits(['change', 'update:modelValue']);
 const open = ref(false);
 const touch = useTouchUi();
-const selected = computed(() => Object.values(props.modelValue).some(values => values?.length));
+const selected = computed(() => Object.values(props.modelValue).some(values => values.length));
 watch(touch, () => { open.value = false; });
 function update(value) { emit('update:modelValue', value); emit('change'); }
 </script>
@@ -35,6 +35,9 @@ function update(value) { emit('update:modelValue', value); emit('change'); }
 </template>
 
 <style>
+.tag-filter-control { min-width: 0; position: relative; display: flex; align-items: center; }
+.tag-filter-control > .var-menu { min-width: 0; flex: 1 1 auto; }
+.tag-filter-popover { overflow: hidden !important; border: 1px solid var(--outline); border-radius: 24px !important; background: var(--surface-highest) !important; }
 .touch-tag-sheet { width: 100%; border-radius: 20px 20px 0 0; background: var(--surface-high); }
 .touch-tag-heading { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; }
 .touch-tag-sheet .tag-filter-panel { width: 100%; max-width: 100%; height: min(65dvh, 560px); min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 58px minmax(0, 1fr); }

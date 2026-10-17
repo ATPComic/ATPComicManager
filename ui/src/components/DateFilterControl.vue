@@ -61,3 +61,18 @@ function updateRange(value) {
     </template>
   </var-menu>
 </template>
+
+<style>
+.date-filter-popover { overflow: hidden !important; border: 1px solid var(--outline) !important; border-radius: 16px !important; background: var(--surface-highest) !important; }
+.date-filter-panel { width: 330px; display: grid; gap: 12px; padding: 14px; }
+.date-filter-panel header { min-height: 32px; display: flex; align-items: center; justify-content: space-between; }
+.date-filter-panel header strong { font-size: 14px; }
+.date-granularity { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.date-range-picker { --date-picker-border-radius: 12px; --date-picker-main-color: var(--text); --date-picker-title-background: var(--surface-high); --date-picker-title-color: var(--text); --date-picker-body-background-color: var(--surface-high); --date-picker-header-color: var(--text); --day-picker-head-item-color: var(--muted); --day-picker-adjacent-item-color: var(--muted); }
+.date-range-picker.var-date-picker { min-width: 0; border: 1px solid var(--outline-soft); }
+
+@media (max-width: 760px) {
+  .date-filter-panel { width: calc(100vw - 16px); max-height: calc(100dvh - 24px); overflow: auto; padding: 10px; }
+  .date-granularity { gap: 4px; }
+}
+</style>

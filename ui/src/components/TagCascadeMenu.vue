@@ -92,3 +92,23 @@ function forwardHover(path, event) {
     </template>
   </div>
 </template>
+
+<style>
+.tag-cascade-level.root { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tag-cascade-level:not(.root) { min-width: 148px; display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.tag-cascade-level.root > .var-menu { display: inline-flex; flex: 0 0 auto; }
+.tag-cascade-level:not(.root) > .var-menu { width: 100%; display: flex; }
+.tag-cascade-level:not(.root) > .tag-picker-chip,
+.tag-cascade-level:not(.root) > .var-menu > .tag-picker-chip { width: 100%; }
+.tag-cascade-level:not(.root) .tag-picker-chip .var-chip__text-small { width: 100%; }
+.tag-cascade-level:not(.root) .tag-picker-label { flex: 1; }
+
+.tag-hover-popover { overflow: visible !important; border: 1px solid var(--outline) !important; border-radius: 16px !important; background: var(--surface-highest) !important; box-shadow: 0 6px 18px rgba(0, 0, 0, .38) !important; }
+.tag-hover-menu { min-width: 148px; max-width: min(420px, calc(100vw - 32px)); padding: 8px; border-radius: inherit; background: var(--surface-highest); }
+.tag-hover-menu .catalog-tag-choice { max-width: 280px; }
+
+@media (max-width: 760px) {
+  .tag-hover-menu { max-width: calc(100vw - 16px); }
+  .tag-cascade-level:not(.root) { min-width: min(260px, calc(100vw - 32px)); }
+}
+</style>

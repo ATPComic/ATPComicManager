@@ -15,7 +15,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:modelValue']);
-const selectedIds = computed(() => new Set(props.modelValue ?? []));
+const selectedIds = computed(() => new Set(props.modelValue));
 const openPath = ref([]);
 let openTimer;
 let closeTimer;
@@ -78,3 +78,8 @@ onBeforeUnmount(clearTimers);
     />
   </div>
 </template>
+
+<style>
+.tag-assignment-picker { min-width: 0; max-width: 100%; }
+.tag-chip-picker { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+</style>

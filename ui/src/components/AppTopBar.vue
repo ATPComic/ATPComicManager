@@ -75,3 +75,11 @@ function exportAction(name) {
     </nav>
   </header>
 </template>
+
+<style>
+.top-export-menu { width: 310px; display: grid; gap: 2px; padding: 6px; }
+
+@media (max-width: 760px) {
+  .top-export-menu { width: calc(100vw - 16px); }
+}
+</style>

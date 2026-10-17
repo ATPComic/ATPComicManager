@@ -21,3 +21,8 @@ const open = ref(false);
     </template>
   </var-menu>
 </template>
+
+<style>
+.reader-help-popover { overflow: hidden !important; border: 1px solid var(--outline); border-radius: 18px !important; background: var(--surface-highest) !important; }
+.reader-help-panel { max-width: min(420px, calc(100vw - 32px)); padding: 14px 16px; color: var(--text); font-size: 13px; line-height: 1.6; }
+</style>

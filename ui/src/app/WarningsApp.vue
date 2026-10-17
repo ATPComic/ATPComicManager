@@ -34,13 +34,13 @@ const WARNING_TYPE_KEYS = {
 
 const groups = computed(() => {
   const result = new Map();
-  for (const warning of state.library.warnings ?? []) {
+  for (const warning of state.library.warnings) {
     result.set(warning.type, (result.get(warning.type) ?? 0) + 1);
   }
   return [...result.entries()];
 });
 
-const filteredWarnings = computed(() => (state.library.warnings ?? []).filter((warning) => {
+const filteredWarnings = computed(() => state.library.warnings.filter((warning) => {
   if (state.selectedType && warning.type !== state.selectedType) return false;
   return !state.errorsOnly || warning.severity === 'error';
 }));
@@ -51,7 +51,7 @@ const pagedWarnings = computed(() => {
 });
 
 const errorCount = computed(() => (
-  (state.library.warnings ?? []).filter((warning) => warning.severity === 'error').length
+  state.library.warnings.filter((warning) => warning.severity === 'error').length
 ));
 const localeOptions = computed(() => [
   { label: t('languageEnglish'), value: 'en' },
@@ -116,13 +116,13 @@ function selectType(type) {
 }
 
 function changeLocale(value) {
-  localStorage.setItem(pagesLocalStorageKey(import.meta.env?.BASE_URL ?? '/', 'comic-manager.locale'), value);
+  localStorage.setItem(pagesLocalStorageKey(import.meta.env.BASE_URL, 'comic-manager.locale'), value);
   window.location.reload();
 }
 
 function openWarning(warning) {
   if (!warning.episodeId) return;
-  const hasManualFiles = state.library.episodes?.[warning.episodeId]?.files?.some((file) => file.assignmentToken);
+  const hasManualFiles = state.library.episodes[warning.episodeId]?.files?.some((file) => file.assignmentToken);
   if (hasManualFiles && ['unassigned-variant', 'missing-pages', 'variant-mismatch'].includes(warning.type)) {
     navigateToPage(`/variants.html?episode=${encodeURIComponent(warning.episodeId)}`);
     return;
@@ -234,3 +234,79 @@ onMounted(async () => {
     </main>
   </div>
 </template>
+
+<style>
+.warnings-grid { height: calc(100% - var(--titlebar-height)); display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 12px; padding: 12px; }
+
+.warning-filter-pane, .warning-main-pane {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--outline-soft);
+  border-radius: 28px !important;
+  background: var(--surface) !important;
+}
+.warning-filter-pane .var-card__floater,
+.warning-filter-pane .var-card__container,
+.warning-filter-pane .var-card__content,
+.warning-main-pane .var-card__floater,
+.warning-main-pane .var-card__container,
+.warning-main-pane .var-card__content { height: 100%; min-height: 0; }
+.warning-filter-pane .var-card__content,
+.warning-main-pane .var-card__content { display: flex; flex-direction: column; }
+
+.warning-filter-list { min-height: 0; flex: 1; overflow: auto; padding: 4px 10px 16px; }
+.warning-filter { min-height: 52px !important; margin: 2px 0; padding: 0 14px !important; border-radius: 16px !important; color: var(--text) !important; }
+.warning-filter .var-button__content { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.warning-filter.active { color: var(--on-secondary-container) !important; background: var(--secondary-container) !important; }
+
+.warning-heading { display: flex; align-items: center; justify-content: flex-start; }
+.warning-summary { margin-left: auto; color: var(--muted); font-size: 12px; }
+.warning-heading .var-switch { margin-left: auto; }
+.warning-summary + .var-switch { margin-left: 8px; }
+.warning-heading > span:last-child { color: var(--muted); font-size: 13px; }
+
+.warning-list { min-height: 0; flex: 1; overflow: auto; padding: 0 10px 8px; }
+.warning-row { width: 100%; min-height: 66px; display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px 12px; border: 0; border-radius: 18px; color: var(--text); background: transparent; text-align: left; cursor: pointer; }
+.warning-row:hover { background: var(--surface-high); }
+.warning-row .var-cell__content { min-width: 0; }
+.warning-row .var-cell__extra { min-width: 0; }
+.warning-copy { min-width: 0; }
+.warning-copy strong, .warning-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.warning-copy strong { font-size: 13px; font-weight: 550; }
+.warning-copy small { margin-top: 5px; color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+.warning-open { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
+
+.pagination-footer { display: flex; align-items: center; min-height: 70px; justify-content: center; padding: 10px 16px; border-top: 1px solid var(--outline-soft); }
+.pagination-footer .var-pagination { width: 100%; justify-content: center; }
+
+@media (max-width: 760px) {
+  .warnings-grid {
+    height: calc(100dvh - var(--titlebar-height));
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 102px minmax(0, 1fr);
+    gap: 0;
+    padding: 0;
+  }
+  .warning-filter-pane, .warning-main-pane { width: 100%; height: auto; border-width: 0 0 1px; border-radius: 0 !important; }
+  .warning-filter-pane .pane-heading { min-height: 34px; padding: 4px 10px 0; }
+  .warning-filter-pane .pane-heading h2 { font-size: 16px; }
+  .warning-filter-list { display: flex; gap: 4px; overflow-x: auto; overflow-y: hidden; padding: 4px 8px 8px; scrollbar-width: none; touch-action: pan-x; }
+  .warning-filter-list::-webkit-scrollbar { display: none; }
+  .warning-filter { min-width: max-content !important; min-height: 48px !important; margin: 0; padding-inline: 12px !important; }
+  .warning-heading { min-height: 62px; flex-wrap: wrap; gap: 3px 7px; padding: 6px 10px; }
+  .warning-heading > div:first-child { width: 100%; }
+  .warning-heading h2 { font-size: 16px; }
+  .warning-heading .overline { display: none; }
+  .warning-summary { margin-left: 0; }
+  .warning-heading .var-switch { margin-left: auto; }
+  .warning-row { min-height: 72px; grid-template-columns: 68px minmax(0, 1fr); gap: 8px; padding: 8px 6px; border-radius: 12px; }
+  .warning-open, .warning-row .var-cell__extra { display: none; }
+  .warning-copy strong, .warning-copy small { white-space: normal; overflow-wrap: anywhere; }
+  .pagination-footer { min-height: 56px; overflow-x: auto; justify-content: flex-start; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
+  .pagination-footer .var-pagination { width: max-content; min-width: 100%; justify-content: flex-start; }
+}
+</style>

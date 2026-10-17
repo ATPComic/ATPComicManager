@@ -10,7 +10,7 @@ import { mdiChevronLeft } from '../lib/icons.js';
 
 const selectedLocale = ref(locale);
 function changeLocale(value) {
-  localStorage.setItem(pagesLocalStorageKey(import.meta.env?.BASE_URL ?? '/', 'comic-manager.locale'), value);
+  localStorage.setItem(pagesLocalStorageKey(import.meta.env.BASE_URL, 'comic-manager.locale'), value);
   window.location.reload();
 }
 const text = (key) => t(key, {}, selectedLocale.value);

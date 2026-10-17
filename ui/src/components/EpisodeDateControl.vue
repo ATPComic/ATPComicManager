@@ -10,7 +10,7 @@ const props = defineProps({
   busy: { type: Boolean, default: false }
 });
 const emit = defineEmits(['save']);
-const LAST_DATE_KEY = pagesLocalStorageKey(import.meta.env?.BASE_URL ?? '/', 'atp-comic.last-episode-date');
+const LAST_DATE_KEY = pagesLocalStorageKey(import.meta.env.BASE_URL, 'atp-comic.last-episode-date');
 const open = ref(false);
 const draft = ref(props.modelValue);
 const manualDraft = ref('');
@@ -147,3 +147,21 @@ function save() {
     </var-menu>
   </div>
 </template>
+
+<style>
+.episode-date-control { display: flex; }
+.episode-date-popover { overflow: hidden !important; border: 1px solid var(--outline) !important; border-radius: 16px !important; background: var(--surface-highest) !important; }
+.episode-date-panel { width: 310px; display: grid; gap: 10px; padding: 12px; }
+.episode-date-panel header { min-height: 32px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.episode-date-panel header > span { min-width: 0; display: grid; gap: 2px; }
+.episode-date-panel header strong { font-size: 14px; }
+.episode-date-panel header small { color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+.episode-date-input .var-field-decorator__controller { min-height: 36px; font-family: var(--font-mono); letter-spacing: .08em; }
+.episode-date-picker { --date-picker-border-radius: 12px; --date-picker-main-color: var(--text); --date-picker-title-background: var(--surface-high); --date-picker-title-color: var(--text); --date-picker-body-background-color: var(--surface-high); --date-picker-header-color: var(--text); --day-picker-head-item-color: var(--muted); --day-picker-adjacent-item-color: var(--muted); }
+.episode-date-picker.var-date-picker { min-width: 0; border: 1px solid var(--outline-soft); }
+.episode-date-panel footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+
+@media (max-width: 760px) {
+  .episode-date-panel { width: calc(100vw - 16px); max-height: calc(100dvh - 24px); overflow: auto; }
+}
+</style>

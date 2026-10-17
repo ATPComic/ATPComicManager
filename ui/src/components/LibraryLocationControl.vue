@@ -117,3 +117,28 @@ onMounted(async () => {
     </template>
   </var-menu>
 </template>
+
+<style>
+.library-location-popover { overflow: hidden !important; border: 1px solid var(--outline) !important; border-radius: var(--app-menu-radius, 16px) !important; background: var(--surface-highest) !important; }
+.library-location-popover { --app-menu-radius: 20px; }
+.library-location-panel { width: min(430px, calc(100vw - 24px)); display: grid; gap: 12px; padding: 16px; }
+.library-location-panel header { display: flex; align-items: center; gap: 12px; }
+.library-location-panel header > .mdi-icon { color: var(--primary); }
+.library-location-panel header > span { min-width: 0; display: grid; gap: 2px; }
+.library-location-panel header strong { font-size: 15px; font-weight: 600; }
+.library-location-panel header small, .library-location-panel p { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.library-location-panel p { margin: 0; }
+.library-location-panel .var-field-decorator, .library-location-panel .var-field-decorator__controller,
+.library-location-panel .var-field-decorator__line { border-radius: 14px !important; }
+.library-location-panel .var-input input { overflow: hidden; font-family: var(--font-mono); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.library-location-panel .library-location-error { color: var(--danger); }
+.library-location-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.library-utility-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding-top: 8px; border-top: 1px solid var(--outline-soft); }
+.library-utility-actions .var-button { justify-content: flex-start; }
+.library-utility-actions .var-button__content { width: 100%; display: flex; align-items: center; gap: 7px; }
+.library-utility-actions .var-badge { margin-left: auto; }
+
+@media (max-width: 760px) {
+  .library-location-panel { width: calc(100vw - 16px); max-height: calc(100dvh - 24px); overflow: auto; }
+}
+</style>

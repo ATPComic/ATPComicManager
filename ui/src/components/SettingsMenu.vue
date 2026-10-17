@@ -105,3 +105,15 @@ async function confirmReset() {
 .reset-note { margin: 0 0 8px; line-height: 1.6; }
 .reset-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 </style>
+
+<style>
+.settings-menu { display: inline-flex; margin-left: 4px; }
+.settings-trigger { width: 32px !important; min-width: 32px; height: 32px !important; padding: 0 !important; border-radius: 50% !important; color: var(--muted) !important; }
+.settings-trigger .var-button__content { display: inline-flex; align-items: center; justify-content: center; }
+.top-actions .settings-trigger .mdi-icon { margin: 0; }
+
+@media (max-width: 760px) {
+  .top-actions .settings-menu { margin-left: auto; }
+  .settings-trigger { width: 38px !important; height: 38px !important; }
+}
+</style>

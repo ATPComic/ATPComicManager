@@ -1254,7 +1254,7 @@ onBeforeUnmount(() => {
     >
       <div class="settings-grid reader-settings">
         <div class="settings-field">
-          <span class="settings-label">{{ t('readingMode') }}</span>
+          <span class="settings-label">{{ t('readerMode') }}</span>
           <var-segmented-buttons :model-value="settingsDraft.mode" :options="readerModeOptions" :checkmark="false" size="small" @update:model-value="settingsDraft.mode = $event" />
         </div>
         <div class="settings-field">
@@ -1533,6 +1533,7 @@ onBeforeUnmount(() => {
   grid-template-rows: var(--titlebar-height) minmax(0, 1fr);
   color: var(--text);
   background: #08090b;
+  --reader-bg: #08090a;
 }
 .reader[hidden] { display: none; }
 .reader::before { content: ""; position: fixed; z-index: 9; top: calc(var(--titlebar-height) - 1px); left: 0; right: 0; height: 1px; background: var(--outline-soft); pointer-events: none; }
@@ -1558,8 +1559,9 @@ onBeforeUnmount(() => {
 .reader-window-controls button:hover { background: color-mix(in srgb, var(--text) 12%, transparent); }
 .reader-window-controls .reader-window-close:hover { color: #fff; background: #c42b1c; }
 .reader-stage { position: relative; min-width: 0; min-height: 0; display: grid; grid-template: "viewport" minmax(0, 1fr) "page" auto "episode" auto / minmax(0, 1fr); overflow: hidden; }
-.reader-viewport { position: relative; grid-area: viewport; min-width: 0; min-height: 0; overflow: hidden; touch-action: none; cursor: default; background: #08090a; timeline-scope: --reader-peek-x, --reader-peek-y; }
-.reader-scroll { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.reader-viewport { position: relative; grid-area: viewport; min-width: 0; min-height: 0; overflow: hidden; touch-action: none; cursor: default; background: var(--reader-bg, #08090a); timeline-scope: --reader-peek-x, --reader-peek-y; }
+.reader-scroll { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: none; touch-action: none; }
+.reader-scroll.is-native-pan { touch-action: pan-x pan-y; }
 .reader-scroll::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .reader-plane { position: relative; cursor: grab; }
 .reader.is-mode-continuous .reader-edge-cue { display: none; }
@@ -1572,6 +1574,7 @@ onBeforeUnmount(() => {
 .reader-page.is-loading, .reader-peek-page.is-loading { opacity: 0; }
 .reader-span, .reader-peek-span { position: absolute; left: 0; top: 0; }
 .reader-page-image, .reader-peek-image { display: block; width: 100%; height: 100%; object-fit: contain; }
+.reader-page-fade { position: absolute; inset: 0; }
 .reader-page-image { user-select: none; }
 .reader-peek-mask { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; transition: opacity var(--peek-fade-duration, 250ms) cubic-bezier(.2, .7, .2, 1); }
 .reader-peek-mover { position: absolute; left: 0; top: 0; }
@@ -1584,7 +1587,6 @@ onBeforeUnmount(() => {
 .reader-peek-track { position: absolute; left: 0; top: 0; }
 .reader.is-mode-single .reader-page:not(.is-current) { visibility: hidden; }
 .reader.is-focus-dim.is-mode-focus .reader-page:not(.is-current) { opacity: .32; cursor: pointer; }
-.reader.is-focus-dim.is-mode-focus .reader-page:not(.is-current):hover { opacity: .5; }
 .reader.is-mode-single .reader-peek-page:not(.is-current) { visibility: hidden; }
 .reader.is-focus-dim.is-mode-focus .reader-peek-page:not(.is-current) { opacity: .32; }
 .reader-edge-cue { position: absolute; z-index: 3; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; opacity: 0; color: var(--text); pointer-events: none; transition: opacity 140ms ease; }

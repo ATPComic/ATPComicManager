@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { t } from '../public/i18n.js';
 import { normalizeSystemLocale, resolveLocale } from '../public/locale.js';
 
 test('system locales normalize English, Japanese, and both Chinese scripts', () => {
@@ -18,4 +19,11 @@ test('locale resolution honors a stored choice and otherwise follows the system'
 test('unsupported system languages fall back to English', () => {
   assert.equal(resolveLocale({ systemLocales: ['fr-FR', 'de-DE'] }), 'en');
   assert.equal(resolveLocale(), 'en');
+});
+
+test('reader mode settings label is translated in every supported locale', () => {
+  assert.deepEqual(
+    ['zh-CN', 'zh-TW', 'en', 'ja'].map((language) => t('readerMode', {}, language)),
+    ['阅读模式', '閱讀模式', 'Reading mode', '表示モード']
+  );
 });

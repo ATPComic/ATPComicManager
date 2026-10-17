@@ -9,7 +9,7 @@ import { isPagesApp, requestJson } from '../services/api.js';
 import { cloneData } from '../lib/clone-data.js';
 import { useUnsavedEdits } from '../composables/use-unsaved-edits.js';
 import { libraryEpisodePath, returnFromPage, returnPathFromHref } from '../lib/navigation.js';
-import { locale, t } from '../../../public/i18n.js';
+import { languageOptions, locale, t } from '../../../public/i18n.js';
 import { pagesLocalStorageKey } from '../../../public/pages-assets-db.js';
 import { getThumbnailUrl } from '../../../public/reader-model.js';
 import {
@@ -56,12 +56,7 @@ const pageMappingDialogOpen = ref(false);
 const pageMappingDraft = ref('');
 const pageMappingTarget = reactive({ variant: null, token: null });
 
-const localeOptions = [
-  { label: t('languageEnglish'), value: 'en', ripple: true },
-  { label: t('languageJapanese'), value: 'ja', ripple: true },
-  { label: t('languageChineseSimplified'), value: 'zh-CN', ripple: true },
-  { label: t('languageChineseTraditional'), value: 'zh-TW', ripple: true }
-];
+const localeOptions = languageOptions;
 
 function manualFiles(episodeId) {
   return (state.library.episodes[episodeId]?.files ?? [])

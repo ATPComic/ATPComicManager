@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watchEffect } from 'vue';
-import { locale, t } from '../../../public/i18n.js';
+import { languageOptions, locale, t } from '../../../public/i18n.js';
 import { pagesLocalStorageKey } from '../../../public/pages-assets-db.js';
 import { privacyContent, privacyUpdated } from '../../../public/locales/privacy.js';
 import { appPath } from '../lib/navigation.js';
@@ -26,10 +26,7 @@ function inlineParts(paragraph) {
     return match ? { text: match[1], href: links[match[2]] } : { text: part };
   });
 }
-const options = computed(() => [
-  { value: 'en', label: text('languageEnglish') }, { value: 'ja', label: text('languageJapanese') },
-  { value: 'zh-CN', label: text('languageChineseSimplified') }, { value: 'zh-TW', label: text('languageChineseTraditional') }
-]);
+const options = languageOptions;
 watchEffect(() => { document.documentElement.lang = selectedLocale.value; document.title = `${text('privacy')} · ATP Comic`; });
 </script>
 

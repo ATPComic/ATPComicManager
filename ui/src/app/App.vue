@@ -54,7 +54,7 @@ import { cloneData } from '../lib/clone-data.js';
 import { navigateToPage, returnPathFromHref, variantEpisodePath } from '../lib/navigation.js';
 import { tagCategoryStyle as getTagCategoryStyle } from '../lib/tag-colors.js';
 import { EPISODE_DRAG_TYPE, EPISODE_SORT_DATE_ASC, EPISODE_SORT_MANUAL, draggedEpisodeId, compareEpisodesByDate, countTagEpisodes, matchesDateFilter, matchesTagFilter, moveItemToSlot, sortEpisodeIds, rowInsertionIndex } from '../../../public/collection-model.js';
-import { locale, t } from '../../../public/i18n.js';
+import { languageOptions, locale, t } from '../../../public/i18n.js';
 import { ComicReader } from '../../../public/reader.js';
 import { getThumbnailUrl, setReaderAssetUrlResolver } from '../../../public/reader-model.js';
 import { readInitialViewState } from '../../../public/view-state.js';
@@ -108,7 +108,7 @@ const nameDraft = ref('');
 const settingsDialogOpen = ref(false);
 const recognitionDialogOpen = ref(false);
 const recognitionDraft = reactive({ version: 1, rules: [], episodeDates: {}, identityMarkers: [] });
-const settingsDraft = reactive({ radius: 144, feather: 32, animationSpeed: 100, mode: 'single', order: 'ltr', fit: 'screen', pageAnimation: true, focusDim: true });
+const settingsDraft = reactive({ radius: 144, feather: 32, animationSpeed: 100, opacity: 50, mode: 'single', order: 'ltr', fit: 'screen', pageAnimation: true, focusDim: true });
 const readerModeOptions = [
   { label: t('readerModeSingle'), value: 'single', ripple: true },
   { label: t('readerModeContinuous'), value: 'continuous', ripple: true },
@@ -318,12 +318,7 @@ const hasActiveTagFilters = computed(() => selectedTagFilters.value.length > 0);
 
 const canReorder = computed(() => sortMode.value === EPISODE_SORT_MANUAL && !!activeTheme.value && !state.search.trim() && !hasActiveTagFilters.value);
 const hasCollectionTags = computed(() => !!Object.keys(activeTheme.value?.tags ?? {}).length);
-const localeOptions = computed(() => [
-  { label: t('languageEnglish'), value: 'en' },
-  { label: t('languageJapanese'), value: 'ja' },
-  { label: t('languageChineseSimplified'), value: 'zh-CN' },
-  { label: t('languageChineseTraditional'), value: 'zh-TW' }
-]);
+const localeOptions = languageOptions;
 
 const tagDialogTitle = computed(() => {
   const title = tagDialogKind.value === 'collection' ? t('editCollectionTags') : t('editEpisodeTags');
@@ -1246,6 +1241,7 @@ onBeforeUnmount(() => {
 
     <var-dialog
       v-model:show="settingsDialogOpen"
+      width="min(600px, calc(100vw - 32px))"
       :title="t('readerSettings')"
       :confirm-button-text="t('save')"
       :cancel-button-text="t('cancel')"
@@ -1253,15 +1249,15 @@ onBeforeUnmount(() => {
       @confirm="saveReaderSettings"
     >
       <div class="settings-grid reader-settings">
-        <div class="settings-field">
+        <div class="settings-field settings-inline">
           <span class="settings-label">{{ t('readerMode') }}</span>
           <var-segmented-buttons :model-value="settingsDraft.mode" :options="readerModeOptions" :checkmark="false" size="small" @update:model-value="settingsDraft.mode = $event" />
         </div>
-        <div class="settings-field">
+        <div class="settings-field settings-inline">
           <span class="settings-label">{{ t('readingOrder') }}</span>
           <var-segmented-buttons :model-value="settingsDraft.order" :options="readerOrderOptions" :checkmark="false" size="small" @update:model-value="settingsDraft.order = $event" />
         </div>
-        <div v-if="settingsDraft.mode === 'continuous'" class="settings-field">
+        <div v-if="settingsDraft.mode === 'continuous'" class="settings-field settings-inline">
           <span class="settings-label">{{ t('pageFit') }}</span>
           <var-segmented-buttons :model-value="settingsDraft.fit" :options="readerFitOptions" :checkmark="false" size="small" @update:model-value="settingsDraft.fit = $event" />
           <small>{{ t('pageFitHelp') }}</small>
@@ -1284,6 +1280,10 @@ onBeforeUnmount(() => {
         <div class="settings-field">
           <var-input v-model="settingsDraft.feather" class="compact-input" type="number" size="small" variant="outlined" :is-show-form-details="false" :placeholder="t('feather')" />
           <small>{{ t('featherHelp') }}</small>
+        </div>
+        <div class="settings-field">
+          <var-input v-model="settingsDraft.opacity" class="compact-input" type="number" size="small" variant="outlined" :is-show-form-details="false" :placeholder="t('peekOpacity')" />
+          <small>{{ t('peekOpacityHelp') }}</small>
         </div>
         <div class="settings-field">
           <var-input v-model="settingsDraft.animationSpeed" class="compact-input" type="number" size="small" variant="outlined" :is-show-form-details="false" :placeholder="t('animationSpeed')" />
@@ -1442,8 +1442,16 @@ onBeforeUnmount(() => {
 
 /* Filter row -------------------------------------------------------------- */
 
-.filter-row { position: relative; flex: 0 0 auto; display: grid; grid-template-columns: minmax(110px, 1fr) minmax(104px, 176px) 112px minmax(104px, 144px); align-items: center; gap: 8px; padding: 6px 16px 10px; }
-.filter-row > .var-menu, .filter-row > .tag-filter-control, .filter-row > .tag-filter-control > .var-menu { width: 100%; min-width: 0; display: flex; }
+/* The search box flexes; the three filter pills size to their content so every
+   language keeps its full label, wrapping to a new line on narrow panes. */
+.filter-row { position: relative; flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 16px 10px; }
+.filter-row > .query-search { flex: 1 1 180px; min-width: 140px; }
+.filter-row > .var-menu,
+.filter-row > .tag-filter-control,
+.filter-row > .sort-filter-control { flex: 0 0 auto; min-width: 0; display: flex; }
+.filter-row .tag-filter-control > .var-menu,
+.filter-row .sort-filter-control > .var-menu { width: auto; }
+.filter-row .query-filter-trigger { width: auto; }
 .active-tag-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 8px; }
 
 /* Episode list ------------------------------------------------------------ */
@@ -1509,7 +1517,11 @@ onBeforeUnmount(() => {
 .settings-field small { line-height: 1.45; }
 .reader-settings .settings-label { color: var(--text); font-size: 13px; font-weight: 600; }
 .reader-settings .settings-divider { padding-top: 6px; border-top: 1px solid var(--outline-soft); color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
-.reader-settings .var-segmented-buttons { width: 100%; }
+.reader-settings .settings-inline { display: flex; flex-wrap: wrap; align-items: center; column-gap: 14px; row-gap: 7px; }
+.reader-settings .settings-inline .settings-label { flex: 0 0 auto; min-width: 120px; white-space: nowrap; }
+.reader-settings .settings-inline .var-segmented-buttons { flex: 0 0 auto; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.reader-settings .settings-inline .var-segmented-buttons::-webkit-scrollbar { display: none; }
+.reader-settings .settings-inline small { flex: 1 1 100%; }
 .reader-settings .settings-switch { grid-template-columns: 1fr auto; align-items: center; }
 .reader-settings .settings-switch .settings-label { grid-column: 1; }
 .reader-settings .settings-switch .var-switch { grid-column: 2; }
@@ -1559,12 +1571,18 @@ onBeforeUnmount(() => {
 .reader-window-controls button:hover { background: color-mix(in srgb, var(--text) 12%, transparent); }
 .reader-window-controls .reader-window-close:hover { color: #fff; background: #c42b1c; }
 .reader-stage { position: relative; min-width: 0; min-height: 0; display: grid; grid-template: "viewport" minmax(0, 1fr) "page" auto "episode" auto / minmax(0, 1fr); overflow: hidden; }
-.reader-viewport { position: relative; grid-area: viewport; min-width: 0; min-height: 0; overflow: hidden; touch-action: none; cursor: default; background: var(--reader-bg, #08090a); timeline-scope: --reader-peek-x, --reader-peek-y; }
+.reader-viewport { position: relative; grid-area: viewport; min-width: 0; min-height: 0; overflow: hidden; touch-action: pan-x pan-y; cursor: default; background: var(--reader-bg, #08090a); timeline-scope: --reader-peek-x, --reader-peek-y; }
 .reader-scroll { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: none; touch-action: none; }
 .reader-scroll.is-native-pan { touch-action: pan-x pan-y; }
+/* Single/Focus hand one-finger panning to the browser (snap on scrollend) so it
+   feels native; only the reading axis is allowed. Continuous uses is-native-pan. */
+.reader.is-mode-single .reader-scroll, .reader.is-mode-focus .reader-scroll { touch-action: pan-x; }
+.reader.is-mode-single.is-order-ttb .reader-scroll, .reader.is-mode-focus.is-order-ttb .reader-scroll { touch-action: pan-y; }
 .reader-scroll::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .reader-plane { position: relative; cursor: grab; }
 .reader.is-mode-continuous .reader-edge-cue { display: none; }
+.reader.is-scrolling .reader-edge-cue { display: none; }
+.reader.is-dragging .reader-edge-cue { display: none; }
 .reader.is-dragging .reader-plane { cursor: grabbing; }
 .reader.is-cursor-hidden .reader-plane, .reader.is-peek-interactive .reader-plane, .reader.is-peek-transitioning .reader-plane { cursor: none; }
 .reader.is-peek-pressing, .reader.is-peek-pressing * { cursor: none !important; }
@@ -1576,7 +1594,18 @@ onBeforeUnmount(() => {
 .reader-page-image, .reader-peek-image { display: block; width: 100%; height: 100%; object-fit: contain; }
 .reader-page-fade { position: absolute; inset: 0; }
 .reader-page-image { user-select: none; }
-.reader-peek-mask { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; transition: opacity var(--peek-fade-duration, 250ms) cubic-bezier(.2, .7, .2, 1); }
+/* Registered so the Peek circle can transition through a CSS variable, keeping
+   the radius and opacity animations on the same timeline (and honoring
+   DevTools slow-motion, which only slows CSS animations). */
+@property --peek-radius { syntax: "<length>"; inherits: false; initial-value: 0px; }
+.reader-peek-mask {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden;
+  --peek-x: 0px; --peek-y: 0px; --peek-radius: 0px; --peek-feather: 0px; --peek-radius-duration: 0ms;
+  mask-image: radial-gradient(circle at var(--peek-x) var(--peek-y), #000 0 calc(var(--peek-radius) - var(--peek-feather)), transparent var(--peek-radius));
+  -webkit-mask-image: radial-gradient(circle at var(--peek-x) var(--peek-y), #000 0 calc(var(--peek-radius) - var(--peek-feather)), transparent var(--peek-radius));
+  mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat;
+  transition: opacity var(--peek-fade-duration, 250ms) cubic-bezier(.2, .7, .2, 1), --peek-radius var(--peek-radius-duration, 0ms) cubic-bezier(.2, .7, .2, 1);
+}
 .reader-peek-mover { position: absolute; left: 0; top: 0; }
 .reader-peek-mover.is-mirror {
   animation: reader-peek-mirror-x linear both, reader-peek-mirror-y linear both;
@@ -1585,9 +1614,12 @@ onBeforeUnmount(() => {
 @keyframes reader-peek-mirror-x { from { translate: 0 0; } to { translate: -100% 0; } }
 @keyframes reader-peek-mirror-y { from { transform: translateY(0); } to { transform: translateY(-100%); } }
 .reader-peek-track { position: absolute; left: 0; top: 0; }
-.reader.is-mode-single .reader-page:not(.is-current) { visibility: hidden; }
+.reader.is-mode-single .reader-page, .reader.is-mode-single .reader-peek-page { opacity: var(--reader-page-alpha, 1); transition: filter 250ms ease; }
+/* In single mode the tile opacity is scroll-linked, so the decode fade lives on
+   the image instead (otherwise the inline/var opacity would bypass is-loading). */
+.reader.is-mode-single .reader-page-image, .reader.is-mode-single .reader-peek-image { transition: opacity 250ms ease; }
+.reader.is-mode-single .reader-page.is-loading .reader-page-image, .reader.is-mode-single .reader-peek-page.is-loading .reader-peek-image { opacity: 0; }
 .reader.is-focus-dim.is-mode-focus .reader-page:not(.is-current) { opacity: .32; cursor: pointer; }
-.reader.is-mode-single .reader-peek-page:not(.is-current) { visibility: hidden; }
 .reader.is-focus-dim.is-mode-focus .reader-peek-page:not(.is-current) { opacity: .32; }
 .reader-edge-cue { position: absolute; z-index: 3; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; opacity: 0; color: var(--text); pointer-events: none; transition: opacity 140ms ease; }
 .reader-edge-cue .mdi-icon { flex: 0 0 auto; display: grid; place-items: center; width: 42px; height: 58px; border: 1px solid color-mix(in srgb, var(--outline) 72%, transparent); border-radius: 18px; background: color-mix(in srgb, var(--surface-highest) 76%, transparent); backdrop-filter: blur(12px); }
@@ -1645,12 +1677,13 @@ onBeforeUnmount(() => {
   .collection-tag-row { min-height: 36px; gap: 5px; padding: 2px 8px 5px; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
   .collection-tag-row::-webkit-scrollbar { display: none; }
   .filter-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 6px;
     padding: 4px 8px 8px;
   }
-  .filter-row > :first-child { grid-column: 1 / -1; }
-  .filter-row > .sort-filter-control { grid-column: 1 / -1; }
+  .filter-row > .query-search { flex-basis: 100%; }
+  .filter-row > .tag-filter-control,
+  .filter-row > .var-menu { flex: 1 1 auto; }
+  .filter-row > .sort-filter-control { flex: 1 1 100%; }
 
   .episode-scroll { padding-bottom: env(safe-area-inset-bottom); }
   .episode-row, .episode-row.ordered {
@@ -1777,12 +1810,13 @@ onBeforeUnmount(() => {
   .pane-heading-library { display: inline-flex; }
   .collection-actions, .collection-tag-row { display: none !important; }
   .filter-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 6px;
     padding: 4px 8px 8px;
   }
-  .filter-row > :first-child { grid-column: 1 / -1; }
-  .filter-row > .sort-filter-control { grid-column: 1 / -1; }
+  .filter-row > .query-search { flex-basis: 100%; }
+  .filter-row > .tag-filter-control,
+  .filter-row > .var-menu { flex: 1 1 auto; }
+  .filter-row > .sort-filter-control { flex: 1 1 100%; }
   .active-tag-filters { overflow-x: auto; flex-wrap: nowrap; padding-inline: 8px; scrollbar-width: none; }
   .active-tag-filters::-webkit-scrollbar { display: none; }
   .episode-scroll { padding-bottom: env(safe-area-inset-bottom); }
@@ -1831,7 +1865,7 @@ onBeforeUnmount(() => {
   .reader-peek-controls { gap: 0; }
   .reader-peek-controls [data-reader-settings] { display: none; }
   .reader-stage { display: grid; grid-template: "viewport" minmax(0, 1fr) "page" auto "episode" auto / minmax(0, 1fr); }
-  .reader-viewport { position: relative; inset: auto; min-height: 0; touch-action: none; }
+  .reader-viewport { position: relative; inset: auto; min-height: 0; }
   .reader.is-fullscreen [data-reader-fullscreen] { display: inline-flex; }
   .reader-tag-fab { display: none !important; }
 }

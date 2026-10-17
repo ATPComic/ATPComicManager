@@ -35,6 +35,21 @@ const PX_PER_LINE = 100 / 3;
 // smooth-scroll animation for every wheel event (which continually restarts it).
 const WHEEL_SCROLL_TAU_MS = 52;
 const WHEEL_SCROLL_EPSILON = 0.5;
+const MIN_ZOOM = 0.05;
+const MAX_ZOOM = 12;
+// Wheel/pinch zoom: discrete mouse notches step by a fixed factor (like browser
+// zoom), while continuous trackpad/pinch deltas accumulate with a per-pixel
+// sensitivity so a full gesture feels responsive.
+const ZOOM_WHEEL_SENSITIVITY = 0.005;
+const ZOOM_NOTCH_MIN_PIXELS = 50;
+const ZOOM_NOTCH_FACTOR = 1.2;
+const ZOOM_TAU_MS = 55;
+const ZOOM_EPSILON = 0.002;
+// Pixels of wheel delta that amount to one page turn in snap modes.
+const PAGE_TURN_WHEEL_THRESHOLD = 42;
+// After the last zoom step, keep mirroring Peek with the JS transform for a
+// moment before handing back to the compositor scroll-timeline.
+const ZOOM_MIRROR_TAIL_MS = 180;
 
 export class ComicReader {
   constructor(root, {
@@ -60,8 +75,8 @@ export class ComicReader {
     this.viewport = root.querySelector('[data-reader-viewport]');
     this.plane = root.querySelector('[data-reader-plane]');
     // A native scroll container drives panning for every mode; the plane is its
-    // content. Zoom is baked into the tile layout (see displayScale) so the
-    // scroll extent always matches what is rendered.
+    // content. Zoom is a CSS transform on the content layers, so the scroll
+    // extent follows the scaled bounds.
     this.scroll = root.querySelector('[data-reader-scroll]');
     if (!this.scroll) {
       this.scroll = document.createElement('div');
@@ -97,19 +112,17 @@ export class ComicReader {
     this.peekRadius = peekSettings.radius;
     this.peekFeather = peekSettings.feather;
     this.peekAnimationSpeed = peekSettings.animationSpeed;
-    this.root.style.setProperty('--peek-fade-duration', `${TIMING_MS}ms`);
+    this.peekOpacity = peekSettings.opacity;
+    this.syncPeekFadeDuration();
     this.peekRadiusCurrent = this.touchMode ? 0 : this.peekRadius;
     this.peekRadiusTarget = this.touchMode ? 0 : this.peekRadius;
-    this.peekAnimationFrame = 0;
     this.peekAnimationResolve = null;
     this.peekTransitionStage = null;
+    this.peekForceOpaque = false;
     this.peekPlane = null;
     this.peekTrack = null;
     this.peekVariant = null;
-    // Coalescing/caching so a high-polling pointer (or a pan/zoom, where the
-    // mask is unchanged) never re-rasterizes the mask more than once per frame.
-    this.peekMaskFrame = 0;
-    this.peekMaskString = '';
+    // Cache of the last written mask opacity so pointer moves do not rewrite it.
     this.peekMaskOpacity = '';
     this.peekVisible = false;
     this.peekRange = null;
@@ -123,11 +136,19 @@ export class ComicReader {
     this.cursorTimer = 0;
     this.pointer = { x: 0, y: 0 };
     this.hasPointerPosition = false;
-    // Native-scroll navigation state. displayScale = fitScale * zoom is baked
-    // into page sizes and offsets; the scroller supplies the camera offset.
+    // Native-scroll navigation state: the tile layout is in fit units and the
+    // scroller supplies both the camera offset and the zoom transform.
     this.zoom = 1;
-    this.displayScale = 1;
     this.baseFitScale = 1;
+    this.zoomTarget = null;
+    this.zoomFrame = 0;
+    this.zoomAnchor = null;
+    this.zoomScrollLastTime = 0;
+    this.zooming = false;
+    this.zoomMirrorTimer = 0;
+    // Zooming deliberately moves the scroll offset; suppress snap-to-page for a
+    // moment so scrollend does not yank the anchored zoom back to centre.
+    this.suppressSnapUntil = 0;
     this.windowFrame = 0;
     this.scrollMirrorFrame = 0;
     this.isScrolling = false;
@@ -137,7 +158,6 @@ export class ComicReader {
     // needed any more. See computeLayout.
     this.layout = null;
     this.contentCross = 0;
-    this.axisPad = 0;
     this.mountedRange = null;
     this.positionsDirty = true;
     this.drag = null;
@@ -147,6 +167,7 @@ export class ComicReader {
     this.touchGesture = null;
     this.touchPoints = new Map();
     this.touchPeek = false;
+    this.touchPinch = null;
     this.touchMode = globalThis.matchMedia?.('(pointer: coarse)').matches ?? false;
     if (this.touchMode) this.peekRadiusCurrent = this.peekRadiusTarget = 0;
     this.resizeFrame = 0;
@@ -157,12 +178,14 @@ export class ComicReader {
     this.wheelScrollPending = 0;
     this.wheelScrollFrame = 0;
     this.wheelScrollLastTime = 0;
-    this.wheelLocked = false;
-    this.wheelLockTimer = 0;
     this.scrollStepActive = false;
-    this.turning = false;
     this.noFadeEntry = null;
     this.suppressCurrentUntil = 0;
+    // Single entry point gate for every relative page turn (wheel, keyboard,
+    // page zones, taps, trackpad). Only one turn may be in flight.
+    this.pageStepLocked = false;
+    this.pageStepLockTimer = 0;
+    this.wheelGestureActive = false;
     // Serialize image decoding: large pages decoded back-to-back compete for
     // CPU and show up as dropped frames.
     this.decodeQueue = [];
@@ -204,6 +227,11 @@ export class ComicReader {
     this.viewport.addEventListener('lostpointercapture', (event) => this.onLostPointerCapture(event));
     this.viewport.addEventListener('pointerleave', () => { if (!this.pageTurnPointer) this.updatePageZone(); });
     this.viewport.addEventListener('auxclick', (event) => { if (event.button === 1) event.preventDefault(); });
+    // Two-finger touches are always ours (Peek or pinch-zoom), so stop the
+    // browser from also panning/zooming while both fingers are down.
+    this.viewport.addEventListener('touchmove', (event) => {
+      if (event.touches.length >= 2) event.preventDefault();
+    }, { passive: false });
     window.addEventListener('resize', () => {
       if (!this.isOpen()) return;
       cancelAnimationFrame(this.resizeFrame);
@@ -262,31 +290,35 @@ export class ComicReader {
     this.resetDecodeQueue();
     this.pendingLoads = 0;
     this.scrollStepActive = false;
-    this.turning = false;
     this.layout = null;
     this.mountedRange = null;
     this.positionsDirty = true;
     this.zoom = 1;
-    this.displayScale = 1;
     this.baseFitScale = 1;
-    this.peekMaskString = '';
+    this.zoomTarget = null;
+    cancelAnimationFrame(this.zoomFrame);
+    this.zoomFrame = 0;
+    this.zoomAnchor = null;
+    this.suppressSnapUntil = 0;
+    this.zooming = false;
+    clearTimeout(this.zoomMirrorTimer);
+    this.zoomMirrorTimer = 0;
     this.peekMaskOpacity = '';
     this.peekVisible = false;
-    cancelAnimationFrame(this.peekMaskFrame);
     cancelAnimationFrame(this.pointerUpdateFrame);
     cancelAnimationFrame(this.windowFrame);
-    this.peekMaskFrame = 0;
     this.pointerUpdateFrame = 0;
     this.windowFrame = 0;
     clearTimeout(this.cursorTimer);
     clearTimeout(this.fullscreenChromeTimer);
     clearTimeout(this.wheelResetTimer);
-    clearTimeout(this.wheelLockTimer);
     clearTimeout(this.scrollIdleTimer);
     this.isScrolling = false;
-    this.wheelLocked = false;
+    clearTimeout(this.pageStepLockTimer);
+    this.pageStepLocked = false;
+    this.pageStepLockTimer = 0;
+    this.wheelGestureActive = false;
     cancelAnimationFrame(this.fullscreenFitFrame);
-    cancelAnimationFrame(this.peekAnimationFrame);
     cancelAnimationFrame(this.wheelScrollFrame);
     this.wheelScrollPending = 0;
     this.wheelScrollFrame = 0;
@@ -296,7 +328,8 @@ export class ComicReader {
     this.peekRadiusCurrent = this.touchMode ? 0 : this.peekRadius;
     this.peekRadiusTarget = this.touchMode ? 0 : this.peekRadius;
     this.peekTransitionStage = null;
-    this.root.classList.remove('is-cursor-hidden', 'is-dragging', 'is-fullscreen', 'is-chrome-visible');
+    this.peekForceOpaque = false;
+    this.root.classList.remove('is-cursor-hidden', 'is-dragging', 'is-fullscreen', 'is-chrome-visible', 'is-scrolling', 'is-page-zone-prev', 'is-page-zone-next');
     this.fullscreenEdgeActive = false;
     this.pageTurnPointer = null;
     this.pointerDown = null;
@@ -305,6 +338,7 @@ export class ComicReader {
     this.updatePageZone();
     this.touchPoints.clear();
     this.touchPeek = false;
+    this.touchPinch = null;
     this.setPageZoneWidths(0, 0);
     const shouldExitFullscreen = this.fullscreenRequested
       && document.fullscreenElement === document.documentElement;
@@ -319,6 +353,7 @@ export class ComicReader {
       radius: this.peekRadius,
       feather: this.peekFeather,
       animationSpeed: this.peekAnimationSpeed,
+      opacity: this.peekOpacity,
       mode: this.readingMode,
       order: this.readingOrder,
       fit: this.pageFit,
@@ -332,7 +367,8 @@ export class ComicReader {
     this.peekRadius = peek.radius;
     this.peekFeather = peek.feather;
     this.peekAnimationSpeed = peek.animationSpeed;
-    this.root.style.setProperty('--peek-fade-duration', `${TIMING_MS}ms`);
+    this.peekOpacity = peek.opacity;
+    this.syncPeekFadeDuration();
     if (this.peekPressPointerId == null && !this.peekTransitionStage) {
       this.peekRadiusCurrent = this.touchMode ? 0 : this.peekRadius;
       this.peekRadiusTarget = this.touchMode ? 0 : this.peekRadius;
@@ -390,7 +426,12 @@ export class ComicReader {
 
   resolvePeekTarget(entry = this.entry) {
     if (!entry || !this.model) return { variant: null, entry: null };
-    return resolveModelPeekTarget(this.model, entry.variant, entry.page, this.getPeekTargetOverride(entry));
+    const target = resolveModelPeekTarget(this.model, entry.variant, entry.page, this.getPeekTargetOverride(entry));
+    // Mounting falls back to the nearest page when the target variant lacks the
+    // current page number; availability and the header must do the same so the
+    // Peek layer is not declared empty while it is actually showing an image.
+    if (!target.variant || target.entry) return target;
+    return { variant: target.variant, entry: findNearestPageEntry(this.model, target.variant, entry.page) ?? null };
   }
 
   peekOverrideKey(variant = this.entry?.variant, episodeId = this.episodeId) {
@@ -406,6 +447,9 @@ export class ComicReader {
 
   renderStrip(entry, { animate = false } = {}) {
     if (!this.model || !this.plane) return;
+    // A rebuilt strip invalidates any in-flight Peek transition (its slots and
+    // plane are replaced), so abort it rather than leaving Peek disabled.
+    this.cancelPeekTransition();
     this.stripToken += 1;
     this.resetDecodeQueue();
     this.pendingLoads = 0;
@@ -446,7 +490,6 @@ export class ComicReader {
     this.peekMover.append(this.peekTrack);
     this.peekPlane.replaceChildren(this.peekMover);
     this.viewport.append(this.peekPlane);
-    this.peekMaskString = '';
     this.peekMaskOpacity = '';
     this.peekVisible = false;
     cancelAnimationFrame(this.pointerUpdateFrame);
@@ -519,25 +562,22 @@ export class ComicReader {
       cursor += (size || 0) + LAYOUT_GAP;
       if (cross > maxCross) maxCross = cross;
     }
-    const viewportCross = horizontal
-      ? (this.viewport?.clientHeight || 0)
-      : (this.viewport?.clientWidth || 0);
-    this.contentCross = Math.max(maxCross, viewportCross);
-    const axisView = horizontal
-      ? (this.scroll?.clientWidth || 0)
-      : (this.scroll?.clientHeight || 0);
-    // Half the viewport on both axis ends lets every page (including the first
-    // and last) be scrolled to the center, which native scroll otherwise cannot.
-    this.axisPad = axisView / 2;
+    // Cross axis is just the largest page cross in fit units; the cross-axis
+    // viewport centring is applied by applyViewTransform (like the axis pad),
+    // so it stays correct at any zoom without re-positioning tiles.
+    this.contentCross = Math.max(maxCross, 1);
+    // The layout is kept in "fit" units (baseFitScale); `zoom` is applied later
+    // as a CSS transform, so tiles never need re-sizing or re-positioning when
+    // the user zooms. The half-viewport leading pad comes from the transform
+    // translate (see applyViewTransform) so the first/last page can centre.
     // total excludes the trailing gap; offsets stay 0-based and monotonic.
     const total = Math.max(0, cursor - LAYOUT_GAP);
     this.layout = { horizontal, dir: this.readingOrder === 'rtl' ? -1 : 1, offsets, sizes, total };
-    // The scroll content must span the whole (scaled) strip so native scroll has
-    // a correct extent even though only a few tiles are mounted.
+    // The scroll content must span the whole strip so native scroll has a
+    // correct extent even though only a few tiles are mounted.
     if (this.plane) {
-      const axisExtent = total + this.axisPad * 2;
-      const width = horizontal ? `${axisExtent}px` : `${this.contentCross}px`;
-      const height = horizontal ? `${this.contentCross}px` : `${axisExtent}px`;
+      const width = horizontal ? `${total}px` : `${this.contentCross}px`;
+      const height = horizontal ? `${this.contentCross}px` : `${total}px`;
       this.plane.style.width = width;
       this.plane.style.height = height;
       if (this.peekTrack) {
@@ -547,6 +587,50 @@ export class ComicReader {
     }
     this.mountedRange = null;
     this.positionsDirty = true;
+  }
+
+  // Half the viewport along the reading axis, in rendered pixels, expressed as
+  // the plane's leading transform translate. It lets native scroll centre the
+  // first and last page (which plain scrollTo cannot).
+  viewPad() {
+    const horizontal = isHorizontalReadingOrder(this.readingOrder);
+    const half = horizontal
+      ? (this.scroll?.clientWidth || 0) / 2
+      : (this.scroll?.clientHeight || 0) / 2;
+    return horizontal ? { x: half, y: 0 } : { x: 0, y: half };
+  }
+
+  // Cross-axis pad (margin) that centres the strip when it is smaller than the
+  // viewport; 0 once zoomed past it so the user can pan.
+  crossPadFor(zoom = this.zoom || 1) {
+    const horizontal = isHorizontalReadingOrder(this.readingOrder);
+    const crossViewport = horizontal
+      ? (this.scroll?.clientHeight || 0)
+      : (this.scroll?.clientWidth || 0);
+    return Math.max(0, (crossViewport - zoom * (this.contentCross || 0)) / 2);
+  }
+
+  // Zoom is a transform on the content layers only: tiles stay at their fit
+  // layout positions/sizes, so changing zoom is a compositor-friendly update.
+  // The axis pad is a (scroller-space) margin on the plane so the first/last
+  // page can be centred; the Peek layer replicates it in its own transform.
+  applyViewTransform() {
+    const zoom = this.zoom || 1;
+    const pad = this.viewPad();
+    const horizontal = isHorizontalReadingOrder(this.readingOrder);
+    const crossPad = this.crossPadFor(zoom);
+    if (this.plane) {
+      this.plane.style.transformOrigin = '0 0';
+      this.plane.style.transform = `scale(${zoom})`;
+      this.plane.style.marginLeft = horizontal ? `${pad.x}px` : `${crossPad}px`;
+      this.plane.style.marginRight = horizontal ? `${pad.x}px` : `${crossPad}px`;
+      this.plane.style.marginTop = horizontal ? `${crossPad}px` : `${pad.y}px`;
+      this.plane.style.marginBottom = horizontal ? `${crossPad}px` : `${pad.y}px`;
+    }
+    if (this.peekTrack) {
+      this.peekTrack.style.transformOrigin = '0 0';
+      this.peekTrack.style.transform = `translate(${pad.x + (horizontal ? 0 : crossPad)}px, ${pad.y + (horizontal ? crossPad : 0)}px) scale(${zoom})`;
+    }
   }
 
   // First index whose span ends at or after `lo` (binary search; offsets grow).
@@ -582,17 +666,17 @@ export class ComicReader {
     return best;
   }
 
-  // Content coordinate of a page (already includes displayScale); RTL mirrors
-  // the axis so the next page sits to the left.
+  // Fit-unit content coordinate of a page; RTL mirrors the axis so the next
+  // page sits to the left. The leading viewport pad is applied by the plane
+  // transform, not here, so this is stable across zoom changes.
   slotPosition(index) {
     const { horizontal, dir, offsets, sizes, total } = this.layout;
     const slot = this.pages[index];
-    const pad = this.axisPad || 0;
     if (horizontal) {
       const base = dir < 0 ? total - offsets[index] - sizes[index] : offsets[index];
-      return { left: pad + base, top: (this.contentCross - slot.height) / 2 };
+      return { left: base, top: (this.contentCross - slot.height) / 2 };
     }
-    return { left: (this.contentCross - slot.width) / 2, top: pad + offsets[index] };
+    return { left: (this.contentCross - slot.width) / 2, top: offsets[index] };
   }
 
   // Logical range [start, end) of pages that intersect the scroller viewport.
@@ -601,11 +685,15 @@ export class ComicReader {
     const { horizontal, dir, total } = this.layout;
     const scrollOffset = horizontal ? this.scroll.scrollLeft : this.scroll.scrollTop;
     const viewSize = horizontal ? this.scroll.clientWidth : this.scroll.clientHeight;
-    const s = scrollOffset - (this.axisPad || 0);
+    const zoom = this.zoom || 1;
+    // Convert the rendered visible window back to fit units (the plane starts at
+    // scrollOffset - halfViewport because of the leading transform pad).
+    const s = (scrollOffset - viewSize / 2) / zoom;
+    const span = viewSize / zoom;
     let lo;
     let hi;
-    if (dir < 0) { lo = total - (s + viewSize); hi = total - s; }
-    else { lo = s; hi = s + viewSize; }
+    if (dir < 0) { lo = total - (s + span); hi = total - s; }
+    else { lo = s; hi = s + span; }
     const start = this.firstIntersecting(lo);
     let end = start;
     while (end < n && this.layout.offsets[end] <= hi) end += 1;
@@ -643,7 +731,7 @@ export class ComicReader {
     // While a page-turn scroll / opacity animation runs, defer mounting (and
     // therefore any image loading) of new pages until it ends. The current page
     // is already preloaded/mounted; prefetch resumes afterwards.
-    if (this.turning || this.scrollStepActive) return;
+    if (this.scrollStepActive) return;
     if (!this.layout) this.computeLayout();
     const center = this.currentIndex();
     if (center < 0) return;
@@ -718,7 +806,7 @@ export class ComicReader {
     while (this.decodeActive < this.decodeLimit && this.decodeQueue.length) {
       // Prefetch decodes are useful only while idle; let visible/current pages
       // win during scrolling so background work cannot compete with animation.
-      if ((this.isScrolling || this.turning || this.scrollStepActive) && this.decodeQueue[0].priority >= 2) return;
+      if ((this.isScrolling || this.scrollStepActive) && this.decodeQueue[0].priority >= 2) return;
       const job = this.decodeQueue.shift();
       if (job.slot && job.slot.type !== 'page') {
         job.resolve();
@@ -731,11 +819,11 @@ export class ComicReader {
         job.resolve();
         if (session === this.decodeSession) job.done?.();
         this.pumpDecode();
-        this.maybeUnlockWheel();
+        this.maybeReleasePageStep();
       };
       this.decodeImage(job.image).then(finish);
     }
-    if (!this.decodeActive && !this.decodeQueue.length) this.maybeUnlockWheel();
+    if (!this.decodeActive && !this.decodeQueue.length) this.maybeReleasePageStep();
   }
 
   resetDecodeQueue() {
@@ -767,14 +855,18 @@ export class ComicReader {
     this.syncScrollMirror();
     this.updatePageZoneWidths();
     this.updatePeekMask();
+    this.applyScrollOpacity();
   }
 
   // Keep the Peek scroller at the same offset as the base scroller. Because the
   // Peek content scrolls natively under a fixed mask, this does not re-raster
   // the mask (unlike moving a masked element with a transform).
   syncScrollMirror() {
-    if (!this.peekVisible) return;
-    if (!this.useScrollTimeline && this.peekMover) {
+    if (!this.peekVisible || !this.peekMover) return;
+    // The compositor scroll-timeline is great during normal scrolling, but while
+    // zooming the base layer moves via a transform; mirror it with the JS
+    // transform in the same frame so Peek does not lag/jitter by a frame.
+    if (!this.useScrollTimeline || this.zooming) {
       this.peekMover.style.transform = `translate3d(${-this.scroll.scrollLeft}px, ${-this.scroll.scrollTop}px, 0)`;
     }
   }
@@ -786,7 +878,7 @@ export class ComicReader {
     if (!this.peekMover || !this.scroll) return;
     const maxX = Math.max(0, this.scroll.scrollWidth - this.scroll.clientWidth);
     const maxY = Math.max(0, this.scroll.scrollHeight - this.scroll.clientHeight);
-    if (this.useScrollTimeline) {
+    if (this.useScrollTimeline && !this.zooming) {
       const timeline = '--reader-peek-x x, --reader-peek-y y';
       if (this.scroll.style.scrollTimeline !== timeline) this.scroll.style.scrollTimeline = timeline;
       this.peekMover.style.transform = '';
@@ -796,8 +888,30 @@ export class ComicReader {
       this.peekMover.style.height = `${maxY}px`;
       this.peekMover.classList.add('is-mirror');
     } else {
+      // Zoom (or no scroll-timeline support): drive the mirror with a JS
+      // transform so Peek and the base transform update in the same frame.
       this.peekMover.classList.remove('is-mirror');
+      this.peekMover.style.width = '';
+      this.peekMover.style.height = '';
+      this.syncScrollMirror();
     }
+  }
+
+  // Enter (and keep alive) the JS-mirror mode used while zooming; after the zoom
+  // burst settles, hand back to the compositor scroll-timeline.
+  markZooming() {
+    if (!this.zooming) {
+      this.zooming = true;
+      this.setupPeekTimeline();
+    }
+    this.syncScrollMirror();
+    clearTimeout(this.zoomMirrorTimer);
+    this.zoomMirrorTimer = setTimeout(() => {
+      this.zoomMirrorTimer = 0;
+      this.zooming = false;
+      this.setupPeekTimeline();
+      this.syncScrollMirror();
+    }, ZOOM_MIRROR_TAIL_MS);
   }
 
   scrollTo(left, top, smooth) {
@@ -855,12 +969,20 @@ export class ComicReader {
   scrollToIndex(index, smooth) {
     if (index < 0 || index >= this.pages.length) return;
     const { horizontal } = this.layout;
-    const viewSize = horizontal ? this.scroll.clientWidth : this.scroll.clientHeight;
-    const pos = this.slotPosition(index);
-    const center = horizontal ? pos.left + this.pages[index].width / 2 : pos.top + this.pages[index].height / 2;
-    const target = Math.max(0, center - viewSize / 2);
+    const target = Math.max(0, this.pageCenterOffset(index));
     if (horizontal) this.scrollTo(target, this.scroll.scrollTop, smooth);
     else this.scrollTo(this.scroll.scrollLeft, target, smooth);
+  }
+
+  // Rendered scroll offset that centres a page. The leading transform pad
+  // cancels the half-viewport term, so it is just the fit centre * zoom.
+  pageCenterOffset(index) {
+    const { horizontal } = this.layout;
+    const pos = this.slotPosition(index);
+    const center = horizontal
+      ? pos.left + this.pages[index].width / 2
+      : pos.top + this.pages[index].height / 2;
+    return center * (this.zoom || 1);
   }
 
   // rAF-coalesced window refresh driven by scroll. Deliberately avoids layout
@@ -876,11 +998,13 @@ export class ComicReader {
       this.mountWindow();
       this.pumpDecode();
       this.updatePeekMask();
+      this.applyScrollOpacity();
     });
   }
 
   onScroll() {
     this.isScrolling = true;
+    this.root.classList.add('is-scrolling');
     clearTimeout(this.scrollIdleTimer);
     this.scrollIdleTimer = setTimeout(() => this.finishScrollActivity(), 140);
     this.scheduleWindow();
@@ -891,8 +1015,9 @@ export class ComicReader {
     this.scrollIdleTimer = 0;
     if (!this.isScrolling) return;
     this.isScrolling = false;
+    this.root.classList.remove('is-scrolling');
     this.pumpDecode();
-    this.maybeUnlockWheel();
+    this.maybeReleasePageStep();
   }
 
   mountPage(slot) {
@@ -954,12 +1079,12 @@ export class ComicReader {
     }
   }
 
-  // Track in-flight image loads so wheel input is only accepted once the next
-  // page has both loaded and decoded.
+  // Track in-flight image loads so the next page turn is only accepted once the
+  // next page has both loaded and decoded.
   settleLoad(token = this.stripToken) {
     if (token !== this.stripToken) return;
     this.pendingLoads -= 1;
-    this.maybeUnlockWheel();
+    this.maybeReleasePageStep();
   }
 
   mountSpan(slot) {
@@ -992,7 +1117,13 @@ export class ComicReader {
       if (slot.peekKey === key && peekElement.firstElementChild) return;
       slot.peekKey = key;
       const fadeIn = this.shouldFadePageOnLoad(slot.entry);
-      peekElement.className = fadeIn ? 'reader-peek-page is-loading' : 'reader-peek-page';
+      // Toggle classes instead of assigning className: `is-current` drives
+      // single/focus visibility, and a wholesale className write would drop it,
+      // hiding the current page's Peek layer after a target switch.
+      peekElement.classList.remove('reader-peek-page', 'reader-peek-span', 'is-loading');
+      peekElement.classList.add('reader-peek-page');
+      if (fadeIn) peekElement.classList.add('is-loading');
+      peekElement.classList.toggle('is-current', slot.entry === this.entry);
       peekElement.style.transition = this.readingMode === 'focus' && !this.pageAnimation ? 'none' : '';
       const image = document.createElement('img');
       image.className = 'reader-peek-image';
@@ -1054,9 +1185,9 @@ export class ComicReader {
   }
 
   applySlotSize(slot) {
-    // Zoom is baked into the layout: the tile's CSS size is natural * displayScale,
-    // so the native scroller's extent always matches what is rendered.
-    const scale = this.displayScale || 1;
+    // Fit-unit tile size (natural * baseFitScale). `zoom` is a plane transform,
+    // so this never changes while zooming; only fit/resize/mode changes redo it.
+    const scale = this.baseFitScale || 1;
     let baseWidth;
     let baseHeight;
     if (this.naturalWidth && this.naturalHeight) {
@@ -1080,6 +1211,7 @@ export class ComicReader {
   applyAllSizes() {
     for (const slot of this.pages) this.applySlotSize(slot);
     this.computeLayout();
+    this.applyViewTransform();
     this.setupPeekTimeline();
   }
 
@@ -1116,7 +1248,6 @@ export class ComicReader {
   applyModeLayout(entry, animate = false) {
     if (!entry) return;
     this.baseFitScale = this.computeFitScale();
-    this.displayScale = this.baseFitScale * (this.zoom || 1);
     this.applyAllSizes();
     this.refreshWindow();
     this.centerOn(entry, animate);
@@ -1176,10 +1307,8 @@ export class ComicReader {
       // Defer mounting/loading until the turn (scroll + fade) ends.
       this.scrollStepActive = true;
     }
-    if (shouldAnimate && this.readingMode === 'single') {
-      this.animatePageTurn(previous, entry, shouldSlide);
-      return;
-    }
+    // Single mode fades through `applyScrollOpacity()`, so a turn is just a
+    // smooth scroll; the other modes center directly.
     this.centerOn(entry, shouldSlide);
   }
 
@@ -1239,77 +1368,6 @@ export class ComicReader {
     });
   }
 
-  // Page-turn animation: the strip slides to the next page while the previous
-  // page fades out and the next page fades in. One switch controls the whole
-  // effect; when disabled the turn is instant. Only the two involved pages are
-  // revealed - off-window pages are not even mounted.
-  animatePageTurn(previous, entry, slide = true) {
-    const duration = TIMING_MS;
-    const token = this.stripToken;
-    const oldRecord = this.pageFor(previous);
-    const newRecord = this.pageFor(entry);
-    if (!oldRecord || !newRecord) {
-      this.centerOn(entry, false);
-      return;
-    }
-    // Larger jumps can land the previous page outside the mounted window; mount
-    // it on demand so the fade still has both pages to work with.
-    if (oldRecord.type !== 'page') this.mountPage(oldRecord);
-    if (newRecord.type !== 'page') this.mountPage(newRecord);
-    for (const record of [oldRecord, newRecord]) {
-      this.ensureAttached(record);
-      if (this.layout) this.setSlotPosition(record, record.index);
-    }
-    this.root.classList.add('is-turning');
-    this.turning = true;
-    for (const record of [oldRecord, newRecord]) {
-      for (const element of [record.element, record.peekElement]) {
-        element.style.transition = 'none';
-        element.style.visibility = 'visible';
-        // Promote just the two involved pages so the cross-fade stays on the
-        // compositor instead of repainting the strip each frame.
-        element.style.willChange = 'opacity';
-      }
-    }
-    // Cross-fade the base AND Peek layers together, otherwise the masked Peek
-    // page would switch instantly while the base fades.
-    oldRecord.element.style.opacity = '1';
-    newRecord.element.style.opacity = '0';
-    oldRecord.peekElement.style.opacity = '1';
-    newRecord.peekElement.style.opacity = '0';
-    this.centerOn(entry, slide);
-    requestAnimationFrame(() => {
-      if (token !== this.stripToken) return;
-      const easing = `opacity ${duration}ms cubic-bezier(.2, .7, .2, 1)`;
-      for (const record of [oldRecord, newRecord]) {
-        record.element.style.transition = easing;
-        record.peekElement.style.transition = easing;
-      }
-      oldRecord.element.style.opacity = '0';
-      newRecord.element.style.opacity = '1';
-      oldRecord.peekElement.style.opacity = '0';
-      newRecord.peekElement.style.opacity = '1';
-    });
-    window.setTimeout(() => {
-      if (token !== this.stripToken) return;
-      this.root.classList.remove('is-turning');
-      this.turning = false;
-      for (const record of [oldRecord, newRecord]) {
-        for (const element of [record.element, record.peekElement]) {
-          element.style.willChange = '';
-          element.style.transition = '';
-        }
-      }
-      this.resetPageStyles();
-      // The turn may have attached pages outside the window; force a full pass
-      // so they are released again.
-      this.mountedRange = null;
-      this.refreshWindow();
-      this.pumpDecode();
-      this.maybeUnlockWheel();
-    }, duration + 60);
-  }
-
   centerOn(entry, animate = false) {
     const record = this.pageFor(entry);
     if (!record || !record.width) return;
@@ -1339,13 +1397,56 @@ export class ComicReader {
     this.updateHeaderForEntry();
   }
 
-  // Content-axis position of the viewport center, then the nearest page center.
+  // Content-axis position of the viewport centre (fit units), then the nearest
+  // page centre. The leading transform pad cancels the half-viewport term, so
+  // the centre is simply scrollOffset / zoom.
   indexAtViewportCenter() {
     const { horizontal, dir, total } = this.layout;
     const scrollOffset = horizontal ? this.scroll.scrollLeft : this.scroll.scrollTop;
-    const viewSize = horizontal ? this.scroll.clientWidth : this.scroll.clientHeight;
-    const s = scrollOffset - (this.axisPad || 0) + viewSize / 2;
+    const s = scrollOffset / (this.zoom || 1);
     return this.findNearestIndex(dir < 0 ? total - s : s);
+  }
+
+  // ------------------------------------------------- single-mode cross-fade
+
+  // Single mode cross-fades the outgoing and incoming pages by how far each is
+  // from the viewport centre. The opacity is a pure function of the scroll
+  // position, so dragging, wheel/keyboard scrolling and programmatic turns all
+  // look identical and never drift out of sync with the native scroll.
+  applyScrollOpacity() {
+    if (this.readingMode !== 'single' || !this.layout || !this.pages.length) {
+      this.clearPageAlpha();
+      return;
+    }
+    const { horizontal, dir, offsets, sizes, total } = this.layout;
+    const scrollOffset = horizontal ? this.scroll.scrollLeft : this.scroll.scrollTop;
+    const play = scrollOffset / (this.zoom || 1);
+    const playAligned = dir < 0 ? total - play : play;
+    const [start, end] = this.mountedRange ?? this.visibleRange();
+    for (let index = start; index < end; index += 1) {
+      const slot = this.pages[index];
+      if (!slot || (!slot.element.parentNode && !slot.peekElement.parentNode)) continue;
+      const size = sizes[index] || (horizontal ? slot.width : slot.height) || 1;
+      const distance = Math.abs(offsets[index] + size / 2 - playAligned);
+      this.setPageAlpha(slot, clamp(1 - distance / (size + LAYOUT_GAP), 0, 1));
+    }
+  }
+
+  setPageAlpha(slot, alpha) {
+    const value = Math.round(alpha * 1000) / 1000;
+    if (slot.alpha === value) return;
+    slot.alpha = value;
+    slot.element.style.setProperty('--reader-page-alpha', String(value));
+    slot.peekElement.style.setProperty('--reader-page-alpha', String(value));
+  }
+
+  clearPageAlpha() {
+    for (const slot of this.pages) {
+      if (slot.alpha === undefined) continue;
+      slot.alpha = undefined;
+      slot.element.style.removeProperty('--reader-page-alpha');
+      slot.peekElement.style.removeProperty('--reader-page-alpha');
+    }
   }
 
   // ---------------------------------------------------------------- nav
@@ -1360,22 +1461,25 @@ export class ComicReader {
     const adjacent = getAdjacentEntry(this.model, this.entry.variant, this.entry.page, step);
     if (adjacent) {
       this.goToEntry(adjacent, { animate: true });
-      return;
+      return true;
     }
     const sequence = this.getSequence(this.episodeId);
     const episodeIndex = sequence.indexOf(this.episodeId);
     const nextEpisodeId = sequence[episodeIndex + step];
-    if (!nextEpisodeId) return;
+    if (!nextEpisodeId) return false;
     const episode = this.getEpisode(nextEpisodeId);
     const model = createEpisodeReaderModel(episode);
     const variant = model.variants.has(this.entry.variant) ? this.entry.variant : model.variantNames[0];
     const pages = model.variants.get(variant) ?? [];
     const entry = step > 0 ? pages[0] : pages.at(-1);
-    if (!entry) return;
+    if (!entry) return false;
     this.episodeId = nextEpisodeId;
     this.model = model;
     await this.preloadEntryImage(entry);
     this.renderStrip(entry);
+    // A cross-episode strip rebuild does not scroll, so release the turn here.
+    this.releasePageStep();
+    return true;
   }
 
   async switchVariant(variant) {
@@ -1448,7 +1552,17 @@ export class ComicReader {
         // Clean up when the new image's opacity transition actually finishes
         // (fallback in case no transition end fires, e.g. reduced motion).
         image.addEventListener('transitionend', onTransitionEnd);
-        window.setTimeout(cleanup, TIMING_MS + 200);
+        // Wait one frame so the CSSTransition exists, then resolve on its real
+        // completion; a hard-coded timer would remove the old image while a
+        // slowed-down animation (DevTools playback rate) is still running.
+        requestAnimationFrame(() => {
+          const animations = image.getAnimations?.() ?? [];
+          if (!animations.length) {
+            cleanup();
+            return;
+          }
+          Promise.allSettled(animations.map((animation) => animation.finished)).then(cleanup);
+        });
       };
       const decode = () => this.decodeImage(image).then(settle);
       if (image.complete && image.naturalWidth) decode();
@@ -1534,12 +1648,18 @@ export class ComicReader {
     const sourceEpisodeId = this.episodeId;
     this.endPeekPress({ releaseCapture: true });
     this.peekTransitionStage = 'expanding';
+    // The whole middle-click transition shows the Peek layer fully opaque; it
+    // settles back to the configured opacity in finishPeekTransition.
+    this.peekForceOpaque = true;
     this.root.classList.add('is-peek-transitioning');
     this.syncPeekInteractionState();
-    await this.animatePeekRadius(this.getPeekCoverRadius(), this.peekDuration(300));
-    if (!this.isOpen() || this.peekTransitionStage !== 'expanding') return;
+    this.updatePeekMask();
+    await this.animatePeekRadius(this.getPeekCoverRadius(), this.peekDuration(500));
+    if (!this.isOpen() || this.peekTransitionStage !== 'expanding') return this.cancelPeekTransition();
     await this.preloadEntryImage(targetEntry);
-    if (sourceEpisodeId !== this.episodeId || !this.isOpen() || this.peekTransitionStage !== 'expanding') return;
+    if (sourceEpisodeId !== this.episodeId || !this.isOpen() || this.peekTransitionStage !== 'expanding') {
+      return this.cancelPeekTransition();
+    }
 
     // Promote the base to the target variant, retaining the old base if it will
     // be needed for the wrap-back (i.e. when the target's Peek target is empty).
@@ -1556,9 +1676,9 @@ export class ComicReader {
     }
 
     await this.nextPaint();
-    if (!this.isOpen() || this.peekTransitionStage !== 'expanding') return;
+    if (!this.isOpen() || this.peekTransitionStage !== 'expanding') return this.cancelPeekTransition();
     await this.hideTransitionOverlay();
-    if (!this.isOpen() || this.peekTransitionStage !== 'resetting') return;
+    if (!this.isOpen() || this.peekTransitionStage !== 'resetting') return this.cancelPeekTransition();
 
     if (retainOldBase) {
       // Only now, after the Peek layer is hidden, move the retained old base
@@ -1575,7 +1695,7 @@ export class ComicReader {
     this.applyModeVisibility();
     this.updateHeaderForEntry();
     await this.nextPaint();
-    if (!this.isOpen() || this.peekTransitionStage !== 'resetting') return;
+    if (!this.isOpen() || this.peekTransitionStage !== 'resetting') return this.cancelPeekTransition();
     await this.revealLoadedPeek();
   }
 
@@ -1657,6 +1777,9 @@ export class ComicReader {
 
   async hideTransitionOverlay() {
     this.peekTransitionStage = 'resetting';
+    // The expand phase is over: the shrink-back reveal must use the configured
+    // Peek opacity again instead of the forced 100% of the expansion.
+    this.peekForceOpaque = false;
     this.peekPlane.style.transition = 'none';
     this.updatePeekMask();
     await this.nextPaint();
@@ -1671,20 +1794,37 @@ export class ComicReader {
     }
     this.peekRadiusCurrent = 0;
     this.peekTransitionStage = 'revealing';
-    this.peekPlane.style.removeProperty('transition');
+    // Collapse to zero instantly while the layer is hidden, then grow from zero
+    // at the configured opacity.
+    this.peekPlane.style.transition = 'none';
     this.updatePeekMask();
     await this.nextPaint();
-    if (!this.isOpen() || this.peekTransitionStage !== 'revealing') return;
+    if (!this.isOpen() || this.peekTransitionStage !== 'revealing') return this.cancelPeekTransition();
     this.peekTransitionStage = 'settling';
+    this.peekPlane.style.removeProperty('transition');
     this.updatePeekMask();
     await this.animatePeekRadius(this.peekRadius, this.peekDuration(300));
-    if (!this.isOpen() || this.peekTransitionStage !== 'settling') return;
+    if (!this.isOpen() || this.peekTransitionStage !== 'settling') return this.cancelPeekTransition();
     this.finishPeekTransition();
   }
 
   finishPeekTransition() {
     this.peekPlane.style.removeProperty('transition');
     this.peekTransitionStage = null;
+    this.peekForceOpaque = false;
+    this.root.classList.remove('is-peek-transitioning');
+    this.syncPeekInteractionState();
+    this.updatePeekMask();
+  }
+
+  // Drop any in-flight Peek transition without animating. Called when the strip
+  // is rebuilt (page/episode change) and from every aborted transition step, so
+  // an interrupted middle-click can never leave Peek permanently disabled.
+  cancelPeekTransition() {
+    if (!this.peekTransitionStage) return;
+    this.peekTransitionStage = null;
+    this.peekForceOpaque = false;
+    this.peekPlane?.style.removeProperty('transition');
     this.root.classList.remove('is-peek-transitioning');
     this.syncPeekInteractionState();
     this.updatePeekMask();
@@ -1697,35 +1837,95 @@ export class ComicReader {
   // ---------------------------------------------------------------- transform
 
   fit() {
+    this.cancelZoomAnimation();
     this.zoom = 1;
     this.layoutPages();
     this.applyModeLayout(this.entry, false);
   }
 
   zoomAt(factor, clientX, clientY) {
+    this.zoomTo((this.zoom || 1) * factor, clientX, clientY);
+  }
+
+  // Set zoom immediately while keeping the content point under the cursor (both
+  // axes) fixed. Works for anchors from buttons, wheel, or a pinch midpoint.
+  zoomTo(nextZoom, clientX, clientY) {
+    const oldZoom = this.zoom || 1;
+    const zoom = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM);
+    if (!zoom || zoom === oldZoom) return;
     const rect = this.viewport.getBoundingClientRect();
     const localX = (clientX == null ? rect.left + rect.width / 2 : clientX) - rect.left;
     const localY = (clientY == null ? rect.top + rect.height / 2 : clientY) - rect.top;
-    const oldScale = this.displayScale || 1;
-    const nextZoom = clamp((this.zoom || 1) * factor, 0.05, 12);
-    const newScale = (this.baseFitScale || 1) * nextZoom;
-    if (!newScale || newScale === oldScale) return;
-    const k = newScale / oldScale;
     const horizontal = isHorizontalReadingOrder(this.readingOrder);
-    const pad = this.axisPad || 0;
-    const padX = horizontal ? pad : 0;
-    const padY = horizontal ? 0 : pad;
-    // Padded content coordinate under the cursor scales about the pad, in both
-    // LTR and RTL, so keep that point fixed while the layout is re-baked.
-    const paddedX = this.scroll.scrollLeft + localX;
-    const paddedY = this.scroll.scrollTop + localY;
-    this.zoom = nextZoom;
-    this.displayScale = newScale;
-    this.applyAllSizes();
-    this.scroll.scrollLeft = padX + (paddedX - padX) * k - localX;
-    this.scroll.scrollTop = padY + (paddedY - padY) * k - localY;
+    const axisPad = (horizontal ? this.scroll.clientWidth : this.scroll.clientHeight) / 2;
+    const axisLocal = horizontal ? localX : localY;
+    const crossLocal = horizontal ? localY : localX;
+    const axisScroll = horizontal ? this.scroll.scrollLeft : this.scroll.scrollTop;
+    const crossScroll = horizontal ? this.scroll.scrollTop : this.scroll.scrollLeft;
+    const crossPad = this.crossPadFor(oldZoom);
+    // Rendered content coordinates under the cursor, kept fixed across the zoom.
+    const axisAnchor = axisScroll + axisLocal - axisPad;
+    const crossAnchor = crossScroll + crossLocal - crossPad;
+    const k = zoom / oldZoom;
+    this.zoom = zoom;
+    this.suppressSnapUntil = performance.now() + 200;
+    this.applyViewTransform();
+    const nextCrossPad = this.crossPadFor(zoom);
+    const nextAxis = axisPad + axisAnchor * k - axisLocal;
+    const nextCross = nextCrossPad + crossAnchor * k - crossLocal;
+    if (horizontal) {
+      this.scroll.scrollLeft = nextAxis;
+      this.scroll.scrollTop = nextCross;
+    } else {
+      this.scroll.scrollTop = nextAxis;
+      this.scroll.scrollLeft = nextCross;
+    }
+    this.markZooming();
     this.refreshWindow();
     this.updateCurrentFromScroll();
+  }
+
+  // Wheel/pinch zoom eases toward an accumulated target instead of stepping
+  // abruptly, so Ctrl+wheel (and trackpad pinch) feels continuous.
+  queueZoom(factor, clientX, clientY) {
+    if (clientX != null && clientY != null) this.zoomAnchor = { x: clientX, y: clientY };
+    const base = this.zoomTarget ?? this.zoom ?? 1;
+    this.zoomTarget = clamp(base * factor, MIN_ZOOM, MAX_ZOOM);
+    if (!this.zoomFrame) {
+      this.zoomScrollLastTime = 0;
+      this.zoomFrame = requestAnimationFrame((time) => this.stepZoom(time));
+    }
+  }
+
+  stepZoom(time) {
+    this.zoomFrame = 0;
+    const target = this.zoomTarget ?? this.zoom;
+    const current = this.zoom || 1;
+    const difference = target - current;
+    if (Math.abs(difference) < ZOOM_EPSILON) {
+      this.zoomTarget = null;
+      return;
+    }
+    if (this.prefersReducedMotion()) {
+      this.zoomTo(target, this.zoomAnchor?.x, this.zoomAnchor?.y);
+      this.zoomTarget = null;
+      return;
+    }
+    const elapsed = this.zoomScrollLastTime
+      ? clamp(time - this.zoomScrollLastTime, 1, 32)
+      : 16.67;
+    this.zoomScrollLastTime = time;
+    const portion = 1 - Math.exp(-elapsed / ZOOM_TAU_MS);
+    const step = difference * portion;
+    const next = Math.abs(step) > Math.abs(difference) ? target : current + step;
+    this.zoomTo(next, this.zoomAnchor?.x, this.zoomAnchor?.y);
+    this.zoomFrame = requestAnimationFrame((nextTime) => this.stepZoom(nextTime));
+  }
+
+  cancelZoomAnimation() {
+    cancelAnimationFrame(this.zoomFrame);
+    this.zoomFrame = 0;
+    this.zoomTarget = null;
   }
 
   // ---------------------------------------------------------------- peek
@@ -1744,9 +1944,20 @@ export class ComicReader {
       || this.peekTransitionStage === 'revealing';
     const available = visibleTransition
       || (this.peekEnabled && !!this.currentPeekEntry() && !hiddenTransition);
-    const radius = Math.max(1, this.peekRadiusCurrent || this.peekRadius);
-    const feather = Math.max(0, this.peekFeather);
     this.peekVisible = available;
+    // The mask layer is viewport-sized, so the circle centre, radius and feather
+    // are expressed directly in viewport-local pixels as CSS variables. The mask
+    // itself is static CSS; only the variables change, which lets `--peek-radius`
+    // animate through a CSS transition (sharing the engine's animation timeline).
+    // Snap to device pixels so the moving/growing edge does not shimmer.
+    const dpr = globalThis.devicePixelRatio || 1;
+    const snap = (value) => Math.round(value * dpr) / dpr;
+    style.setProperty('--peek-x', `${snap(this.pointer.x)}px`);
+    style.setProperty('--peek-y', `${snap(this.pointer.y)}px`);
+    style.setProperty('--peek-feather', `${Math.max(0, this.peekFeather)}px`);
+    const radiusValue = Number.isFinite(this.peekRadiusCurrent) ? this.peekRadiusCurrent : this.peekRadius;
+    const radius = Math.max(0, radiusValue);
+    style.setProperty('--peek-radius', `${snap(radius)}px`);
     if (!available) {
       if (this.peekMaskOpacity !== '0') {
         style.opacity = '0';
@@ -1754,25 +1965,14 @@ export class ComicReader {
       }
       return;
     }
-    // The mask layer is viewport-sized, so the circle center, radius and feather
-    // are expressed directly in viewport-local pixels. Snap them to device pixels
-    // so the moving/growing edge does not shimmer at sub-pixel offsets.
-    const dpr = globalThis.devicePixelRatio || 1;
-    const snap = (value) => Math.round(value * dpr) / dpr;
-    const x = snap(this.pointer.x);
-    const y = snap(this.pointer.y);
-    const outer = snap(radius);
-    const inner = snap(Math.max(0, radius - feather));
-    const mask = `radial-gradient(circle at ${x}px ${y}px, #000 0 ${inner}px, transparent ${outer}px)`;
-    // Rewriting an identical mask (panning/zooming moves only the camera, not the
-    // circle) would force a full re-mask of the layer for nothing.
-    if (mask !== this.peekMaskString) {
-      this.peekMaskString = mask;
-      style.maskImage = mask;
-    }
-    if (this.peekMaskOpacity !== '1') {
-      style.opacity = '1';
-      this.peekMaskOpacity = '1';
+    // A semi-transparent Peek is the configured hover look; pressing the left
+    // mouse button (or the expand phase of the middle-click transition) restores
+    // full opacity for a moment, so the reveal is instantly readable.
+    const opaque = this.peekPressPointerId != null || this.peekForceOpaque;
+    const opacity = opaque ? '1' : String(this.peekOpacity / 100);
+    if (this.peekMaskOpacity !== opacity) {
+      style.opacity = opacity;
+      this.peekMaskOpacity = opacity;
     }
   }
 
@@ -1794,38 +1994,60 @@ export class ComicReader {
     return Math.round(baseDuration * 100 / this.peekAnimationSpeed);
   }
 
+  // The Peek layer's opacity fade must follow the configured animation speed
+  // too, otherwise reveal/hide would finish long before the radius/opacity
+  // animation it is paired with (or vice versa).
+  syncPeekFadeDuration() {
+    this.root.style.setProperty('--peek-fade-duration', `${this.peekDuration(TIMING_MS)}ms`);
+  }
+
   prefersReducedMotion() {
     return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   }
 
   animatePeekRadius(target, duration = this.peekDuration(140)) {
-    cancelAnimationFrame(this.peekAnimationFrame);
+    // A new target supersedes any in-flight radius wait.
     this.peekAnimationResolve?.();
-    if (duration <= 0) {
-      this.peekAnimationResolve = null;
-      this.peekRadiusCurrent = target;
-      this.peekRadiusTarget = target;
-      this.updatePeekMask();
-      return Promise.resolve();
-    }
-    const from = this.peekRadiusCurrent;
-    const startedAt = performance.now();
+    this.peekAnimationResolve = null;
+    this.peekRadiusCurrent = target;
     this.peekRadiusTarget = target;
+    const plane = this.peekPlane;
+    if (!plane) return Promise.resolve();
+    // The radius animates through CSS so it shares the engine timeline with the
+    // opacity fade (and therefore scales with DevTools slow-motion).
+    plane.style.setProperty('--peek-radius-duration', duration > 0 ? `${duration}ms` : '0ms');
+    this.updatePeekMask();
+    if (duration <= 0) return Promise.resolve();
+    return this.waitForPeekRadius();
+  }
+
+  // Resolve when the radius transition actually ends. `getAnimations()` reports
+  // the engine's real timeline, so a slowed-down animation is awaited correctly
+  // instead of being cut off by a hard-coded duration.
+  waitForPeekRadius() {
     return new Promise((resolve) => {
-      this.peekAnimationResolve = resolve;
-      const step = (now) => {
-        const progress = clamp((now - startedAt) / duration, 0, 1);
-        const eased = 1 - Math.pow(1 - progress, 3);
-        this.peekRadiusCurrent = from + (this.peekRadiusTarget - from) * eased;
-        this.updatePeekMask();
-        if (progress < 1) {
-          this.peekAnimationFrame = requestAnimationFrame(step);
-          return;
-        }
-        this.peekAnimationResolve = null;
+      const plane = this.peekPlane;
+      if (!plane) { resolve(); return; }
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        plane.removeEventListener('transitionend', onEnd);
+        if (this.peekAnimationResolve === finish) this.peekAnimationResolve = null;
         resolve();
       };
-      this.peekAnimationFrame = requestAnimationFrame(step);
+      const onEnd = (event) => {
+        if (event.target === plane && String(event.propertyName).includes('peek-radius')) finish();
+      };
+      plane.addEventListener('transitionend', onEnd);
+      this.peekAnimationResolve = finish;
+      this.nextPaint().then(() => {
+        if (settled) return;
+        const animations = (plane.getAnimations?.() ?? [])
+          .filter((animation) => String(animation.transitionProperty ?? '').includes('peek-radius'));
+        if (!animations.length) { finish(); return; }
+        Promise.allSettled(animations.map((animation) => animation.finished)).then(finish);
+      });
     });
   }
 
@@ -1852,11 +2074,12 @@ export class ComicReader {
     if (animateRadius) {
       this.animatePeekRadius(this.peekRadius, this.peekDuration(210));
     } else {
-      cancelAnimationFrame(this.peekAnimationFrame);
       this.peekAnimationResolve?.();
       this.peekAnimationResolve = null;
       this.peekRadiusCurrent = this.peekRadius;
       this.peekRadiusTarget = this.peekRadius;
+      // Restore instantly (no radius transition) when the press is abandoned.
+      this.peekPlane?.style.setProperty('--peek-radius-duration', '0ms');
       this.updatePeekMask();
     }
     return true;
@@ -1907,13 +2130,15 @@ export class ComicReader {
   // ---------------------------------------------------------------- pointer
 
   onWheel(event) {
+    const horizontal = isHorizontalReadingOrder(this.readingOrder);
+    const axisSize = horizontal ? this.scroll.clientWidth : this.scroll.clientHeight;
     if (this.isContinuous()) {
       if (event.ctrlKey || event.metaKey) {
         event.preventDefault();
-        this.zoomAt(Math.exp(-event.deltaY * 0.0015), event.clientX, event.clientY);
+        const pixels = this.wheelDeltaPixels(event, axisSize);
+        this.queueZoom(this.zoomFactorForWheel(pixels), event.clientX, event.clientY);
         return;
       }
-      const horizontal = isHorizontalReadingOrder(this.readingOrder);
       // Keep native vertical scrolling and precision-touchpad horizontal input.
       // A vertical wheel has no horizontal native axis, so map its accumulated
       // delta to a short ease; the browser exposes no API to synthesize native
@@ -1921,7 +2146,7 @@ export class ComicReader {
       if (!horizontal) return;
       if (event.deltaMode === 0 && Math.abs(event.deltaX) > Math.abs(event.deltaY) && event.deltaX !== 0) return;
       event.preventDefault();
-      const delta = this.wheelDeltaPixels(event, this.scroll.clientWidth);
+      const delta = this.wheelDeltaPixels(event, axisSize);
       if (!delta) return;
       const direction = this.readingOrder === 'rtl' ? -1 : 1;
       this.queueWheelScroll(direction * delta);
@@ -1930,22 +2155,27 @@ export class ComicReader {
     event.preventDefault();
     const intent = getWheelIntent(event);
     if (intent.mode === 'zoom') {
-      this.zoomAt(Math.exp(-intent.delta * 0.0015), event.clientX, event.clientY);
+      const pixels = this.wheelDeltaPixels(event, axisSize);
+      this.queueZoom(this.zoomFactorForWheel(pixels), event.clientX, event.clientY);
       return;
     }
-    const axisSize = isHorizontalReadingOrder(this.readingOrder) ? this.scroll.clientWidth : this.scroll.clientHeight;
     const delta = this.wheelDeltaPixels(event, axisSize);
     clearTimeout(this.wheelResetTimer);
     this.wheelAccumulator += delta;
-    // One page per notch; ignore further notches until the turn finishes and the
-    // next page has loaded, so scroll / load / input never overlap.
-    if (!this.wheelLocked && Math.abs(this.wheelAccumulator) >= 60) {
+    // One page per notch. The gesture stays "active" until the wheel is idle for
+    // a moment, so trackpad momentum cannot trigger a second turn after the
+    // first one's scroll ends.
+    this.wheelGestureActive = true;
+    if (!this.pageStepLocked && Math.abs(this.wheelAccumulator) >= PAGE_TURN_WHEEL_THRESHOLD) {
       const direction = Math.sign(this.wheelAccumulator);
       this.wheelAccumulator = 0;
-      this.lockWheel();
-      this.movePage(direction);
+      this.stepPage(direction, 'wheel');
     }
-    this.wheelResetTimer = setTimeout(() => { this.wheelAccumulator = 0; }, 160);
+    this.wheelResetTimer = setTimeout(() => {
+      this.wheelAccumulator = 0;
+      this.wheelGestureActive = false;
+      this.maybeReleasePageStep();
+    }, 160);
   }
 
   // Convert a wheel event to a pixel delta along the dominant axis, applying the
@@ -1957,44 +2187,85 @@ export class ComicReader {
     return delta;
   }
 
-  // Wheel input is ignored until the current scroll animation ends AND the next
-  // page(s) have finished decoding, so scroll / load / input never overlap. A
-  // fallback timer guards engines/paths where scrollend never fires.
-  lockWheel() {
-    this.wheelLocked = true;
-    clearTimeout(this.wheelLockTimer);
-    this.wheelLockTimer = setTimeout(() => { this.wheelLocked = false; }, 3000);
+  // Zoom factor for one wheel/pinch event: a discrete notch (mouse wheel) steps
+  // by a fixed ratio, continuous deltas (trackpad/pinch) accumulate per pixel.
+  zoomFactorForWheel(pixels) {
+    if (!pixels) return 1;
+    if (Math.abs(pixels) >= ZOOM_NOTCH_MIN_PIXELS) {
+      return pixels > 0 ? 1 / ZOOM_NOTCH_FACTOR : ZOOM_NOTCH_FACTOR;
+    }
+    return Math.exp(-pixels * ZOOM_WHEEL_SENSITIVITY);
+  }
+
+  // ------------------------------------------------------------- page stepping
+
+  // The single entry point for every relative page turn (wheel, keyboard, edge
+  // zones, taps, trackpad). Only one turn is in flight at a time; further
+  // requests are ignored until it settles.
+  stepPage(direction, source = '') {
+    const step = Math.sign(direction) || 0;
+    if (!step || !this.isOpen() || this.pageStepLocked || this.peekTransitionStage) return false;
+    this.beginPageStep();
+    Promise.resolve(this.movePage(step, source)).then((moved) => {
+      if (moved === false) this.releasePageStep();
+    });
+    return true;
+  }
+
+  beginPageStep() {
+    this.pageStepLocked = true;
+    clearTimeout(this.pageStepLockTimer);
+    // Fallback for engines/paths where scrollend never fires.
+    this.pageStepLockTimer = setTimeout(() => this.releasePageStep(), 3000);
+  }
+
+  releasePageStep() {
+    this.pageStepLocked = false;
+    clearTimeout(this.pageStepLockTimer);
+    this.pageStepLockTimer = 0;
+  }
+
+  maybeReleasePageStep() {
+    if (!this.pageStepLocked || this.scrollStepActive || this.wheelGestureActive || this.drag) return;
+    if (this.decodeActive === 0 && this.decodeQueue.length === 0 && this.pendingLoads === 0) this.releasePageStep();
   }
 
   onScrollEnd() {
-    clearTimeout(this.wheelLockTimer);
-    this.wheelLockTimer = 0;
     clearTimeout(this.scrollIdleTimer);
     this.scrollIdleTimer = 0;
     this.isScrolling = false;
+    this.root.classList.remove('is-scrolling');
     // Scroll finished: now mount/load the pages the new position needs, then
-    // release input once decoding drains.
+    // release the turn once decoding drains.
     this.scrollStepActive = false;
     this.mountWindow();
     this.pumpDecode();
-    this.maybeUnlockWheel();
+    this.maybeReleasePageStep();
+    this.applyScrollOpacity();
+    // Re-arm the page-edge cues only after the scroll has settled.
+    this.updatePageZone();
+    // Free scrolls settle onto the nearest page, but never mid-gesture: a mouse
+    // drag pauses between moves, and a finger may rest while the scroll idles.
+    if (!this.drag && this.touchPoints.size === 0) this.snapToNearest();
   }
 
-  maybeUnlockWheel() {
-    if (!this.wheelLocked || this.scrollStepActive || this.turning) return;
-    if (this.decodeActive === 0 && this.decodeQueue.length === 0 && this.pendingLoads === 0) this.wheelLocked = false;
-  }
-
-  // Align to the nearest page after a free drag (replaces CSS scroll-snap, which
-  // clamped multi-page programmatic scrolls).
+  // Align to the nearest page after a free scroll (native touch pan or mouse
+  // drag). A tiny dead zone avoids re-issuing a smooth scroll when the position
+  // is already centred (e.g. after a programmatic turn).
   snapToNearest() {
-    if (this.isContinuous()) return;
+    if (this.isContinuous() || !this.layout || !this.pages.length) return;
+    if (performance.now() < this.suppressSnapUntil) return;
     const index = this.indexAtViewportCenter();
-    if (index >= 0) this.scrollToIndex(index, true);
+    if (index < 0) return;
+    const { horizontal } = this.layout;
+    const offset = horizontal ? this.scroll.scrollLeft : this.scroll.scrollTop;
+    if (Math.abs(offset - this.pageCenterOffset(index)) <= 1) return;
+    this.scrollToIndex(index, true);
   }
 
   onPointerDown(event) {
     this.suppressClick = false;
+    this.cancelZoomAnimation();
     this.markInputModality(event.pointerType);
     if (event.pointerType === 'touch') {
       this.touchMode = true;
@@ -2002,20 +2273,27 @@ export class ComicReader {
       if (this.isContinuous()) {
         // Continuous mode uses native touch scrolling (touch-action on the
         // scroller); a second finger reveals Peek.
-        if (this.touchPoints.size >= 2) {
+        if (this.touchPoints.size >= 2 && this.peekEnabled) {
           this.touchPeek = true;
           this.updateTouchPeek();
         }
         return;
       }
-      this.viewport.setPointerCapture(event.pointerId);
       if (this.touchPoints.size === 1) {
         this.touchGesture = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, swiping: false };
-        this.animatePeekRadius(0, this.peekDuration(160));
+        this.touchPinch = null;
+        if (this.peekEnabled) this.animatePeekRadius(0, this.peekDuration(160));
       } else {
-        this.touchPeek = true;
+        // Second finger: Peek when enabled, otherwise pinch-zoom. Native
+        // single-finger panning stays available through `touch-action`.
         this.touchGesture = null;
-        this.updateTouchPeek();
+        if (this.peekEnabled) {
+          this.touchPeek = true;
+          this.touchPinch = null;
+          this.updateTouchPeek();
+        } else {
+          this.touchPinch = this.touchPinchState();
+        }
       }
       return;
     }
@@ -2050,8 +2328,10 @@ export class ComicReader {
         if (this.isContinuous()) {
           // Native scrolling handles the pan; only Peek follows the fingers.
           if (this.touchPeek) this.updateTouchPeek();
-        } else {
+        } else if (this.touchPeek) {
           this.updateTouchPeek();
+        } else if (!this.peekEnabled && this.touchPoints.size >= 2) {
+          this.updateTouchPinch();
         }
       }
       return;
@@ -2081,8 +2361,15 @@ export class ComicReader {
       const hadPoint = this.touchPoints.delete(event.pointerId);
       if (!hadPoint) return;
       if (this.touchPeek) {
-        if (this.touchPoints.size < 2) this.animatePeekRadius(0, this.peekDuration(210));
-        if (!this.touchPoints.size) this.touchPeek = false;
+        if (this.touchPoints.size < 2) {
+          this.touchPeek = false;
+          this.animatePeekRadius(0, this.peekDuration(210));
+        }
+        this.touchGesture = null;
+        return;
+      }
+      if (this.touchPinch) {
+        if (this.touchPoints.size < 2) this.touchPinch = null;
         this.touchGesture = null;
         return;
       }
@@ -2092,7 +2379,9 @@ export class ComicReader {
       }
       const gesture = this.touchGesture;
       this.touchGesture = null;
-      if (!cancelled && gesture && Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) < 12) {
+      const tapped = !cancelled && gesture
+        && Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) < 12;
+      if (tapped) {
         const page = this.pageAt?.(event.clientX, event.clientY) ?? null;
         if (page && page.entry !== this.entry) {
           this.goToEntry(page.entry, { animate: true });
@@ -2100,16 +2389,19 @@ export class ComicReader {
           const rect = this.viewport.getBoundingClientRect();
           if (isHorizontalReadingOrder(this.readingOrder)) {
             const ratio = (event.clientX - rect.left) / rect.width;
-            if (ratio < 0.35) this.movePage(getLogicalPageStep(this.readingOrder, -1));
-            else if (ratio > 0.65) this.movePage(getLogicalPageStep(this.readingOrder, 1));
+            if (ratio < 0.35) this.stepPage(getLogicalPageStep(this.readingOrder, -1), 'touch');
+            else if (ratio > 0.65) this.stepPage(getLogicalPageStep(this.readingOrder, 1), 'touch');
             else this.root.classList.toggle('is-chrome-visible');
           } else {
             const ratio = (event.clientY - rect.top) / rect.height;
-            if (ratio < 0.35) this.movePage(-1);
-            else if (ratio > 0.65) this.movePage(1);
+            if (ratio < 0.35) this.stepPage(-1, 'touch');
+            else if (ratio > 0.65) this.stepPage(1, 'touch');
             else this.root.classList.toggle('is-chrome-visible');
           }
         }
+      } else if (this.touchPoints.size === 0) {
+        // A native pan just ended: settle onto the nearest page.
+        this.snapToNearest();
       }
       return;
     }
@@ -2121,7 +2413,7 @@ export class ComicReader {
       this.updatePageZone(event.clientX);
       if (!cancelled && !pointer.cancelled && distance <= 8 && direction === pointer.direction) {
         this.suppressClick = true;
-        this.movePage(getLogicalPageStep(this.readingOrder, pointer.direction));
+        this.stepPage(getLogicalPageStep(this.readingOrder, pointer.direction), 'zone');
       }
       return;
     }
@@ -2157,6 +2449,28 @@ export class ComicReader {
     this.pointer = this.toViewportPoint((a.x + b.x) / 2, (a.y + b.y) / 2);
     this.hasPointerPosition = true;
     this.animatePeekRadius(Math.hypot(a.x - b.x, a.y - b.y) / 2, this.peekDuration(80));
+  }
+
+  // Two-finger pinch (only when Peek is disabled): the finger-distance ratio
+  // drives the same `zoomAt()` as the trackpad/buttons, anchored at the midpoint.
+  touchPinchState() {
+    const points = [...this.touchPoints.values()];
+    if (points.length < 2) return null;
+    const [a, b] = points;
+    return {
+      distance: Math.hypot(a.x - b.x, a.y - b.y),
+      x: (a.x + b.x) / 2,
+      y: (a.y + b.y) / 2
+    };
+  }
+
+  updateTouchPinch() {
+    if (this.peekEnabled || this.touchPoints.size < 2) return;
+    const state = this.touchPinchState();
+    const previous = this.touchPinch;
+    this.touchPinch = state;
+    if (!state || !previous?.distance || !state.distance) return;
+    this.zoomAt(state.distance / previous.distance, state.x, state.y);
   }
 
   onLostPointerCapture(event) {
@@ -2229,6 +2543,12 @@ export class ComicReader {
   }
 
   updatePageZoneWidths() {
+    // The edge cues are hidden while scrolling or dragging; skip the layout
+    // reads (and the repaint they trigger) until the gesture settles.
+    if (this.isScrolling || this.drag) {
+      this.setPageZoneWidths(0, 0);
+      return;
+    }
     const record = this.pageFor(this.entry);
     if (this.readingMode !== 'single' || !isHorizontalReadingOrder(this.readingOrder) || !record || !record.width || !this.isOpen()) {
       this.setPageZoneWidths(0, 0);
@@ -2246,6 +2566,11 @@ export class ComicReader {
   }
 
   updatePageZone(clientX) {
+    if (this.isScrolling || this.drag) {
+      this.pageZoneDirection = 0;
+      this.root.classList.remove('is-page-zone-prev', 'is-page-zone-next');
+      return;
+    }
     this.updatePageZoneWidths();
     this.pageZoneDirection = this.getPageZoneDirection(clientX);
     this.root.classList.toggle('is-page-zone-prev', this.pageZoneDirection < 0);
@@ -2302,6 +2627,7 @@ export class ComicReader {
     // Only the Peek layer changes; the base layer must not reload.
     this.peekVariant = this.resolvePeekTarget(this.entry).variant ?? null;
     this.setPeekVariant(this.peekVariant);
+    this.applyModeVisibility();
     this.updateHeaderForEntry();
     return true;
   }
@@ -2418,8 +2744,8 @@ export class ComicReader {
     const previousVariant = () => this.switchVariant(variants[Math.max(0, variantIndex - 1)]);
     const nextVariant = () => this.switchVariant(variants[Math.min(variants.length - 1, variantIndex + 1)]);
     const baseActions = {
-      PageUp: () => this.movePage(-1),
-      PageDown: () => this.movePage(1),
+      PageUp: () => this.stepPage(-1, 'keyboard'),
+      PageDown: () => this.stepPage(1, 'keyboard'),
       '0': () => this.fit(),
       '=': () => this.zoomAt(1.25),
       '+': () => this.zoomAt(1.25),
@@ -2432,15 +2758,15 @@ export class ComicReader {
     const actions = isHorizontalReadingOrder(this.readingOrder)
       ? {
           ...baseActions,
-          ArrowLeft: () => this.movePage(getLogicalPageStep(this.readingOrder, -1)),
-          ArrowRight: () => this.movePage(getLogicalPageStep(this.readingOrder, 1)),
+          ArrowLeft: () => this.stepPage(getLogicalPageStep(this.readingOrder, -1), 'keyboard'),
+          ArrowRight: () => this.stepPage(getLogicalPageStep(this.readingOrder, 1), 'keyboard'),
           ArrowUp: previousVariant,
           ArrowDown: nextVariant
         }
       : {
           ...baseActions,
-          ArrowUp: () => this.movePage(-1),
-          ArrowDown: () => this.movePage(1),
+          ArrowUp: () => this.stepPage(-1, 'keyboard'),
+          ArrowDown: () => this.stepPage(1, 'keyboard'),
           ArrowLeft: previousVariant,
           ArrowRight: nextVariant
         };

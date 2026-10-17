@@ -7,7 +7,7 @@ import SettingsMenu from '../components/SettingsMenu.vue';
 import MdiIcon from '../components/MdiIcon.vue';
 import { requestJson } from '../services/api.js';
 import { navigateToPage, returnFromPage } from '../lib/navigation.js';
-import { locale, t } from '../../../public/i18n.js';
+import { languageOptions, locale, t } from '../../../public/i18n.js';
 import { pagesLocalStorageKey } from '../../../public/pages-assets-db.js';
 
 const state = reactive({ library: { warnings: [] }, selectedType: null, errorsOnly: false });
@@ -53,12 +53,7 @@ const pagedWarnings = computed(() => {
 const errorCount = computed(() => (
   state.library.warnings.filter((warning) => warning.severity === 'error').length
 ));
-const localeOptions = computed(() => [
-  { label: t('languageEnglish'), value: 'en' },
-  { label: t('languageJapanese'), value: 'ja' },
-  { label: t('languageChineseSimplified'), value: 'zh-CN' },
-  { label: t('languageChineseTraditional'), value: 'zh-TW' }
-]);
+const localeOptions = languageOptions;
 
 function warningTypeLabel(type) {
   const key = WARNING_TYPE_KEYS[type];

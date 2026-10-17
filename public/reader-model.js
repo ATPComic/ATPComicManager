@@ -7,6 +7,14 @@ import {
 
 const SOURCE_IMAGE_PATTERN = /^(\d{8})_([a-z])(\d+)\.(?:jpe?g|png|webp|gif|bmp|tiff?|avif)$/i;
 export const DEFAULT_PEEK_SETTINGS = Object.freeze({ radius: 112, feather: 14, animationSpeed: 100 });
+
+export const READING_MODES = Object.freeze(['single', 'continuous', 'focus']);
+
+export const READING_ORDERS = Object.freeze(['ltr', 'rtl', 'ttb']);
+
+export const DEFAULT_READING_MODE = 'single';
+
+export const DEFAULT_READING_ORDER = 'ltr';
 let assetUrlResolver = null;
 
 export function setReaderAssetUrlResolver(resolver = null) {
@@ -27,6 +35,63 @@ export function normalizePeekSettings(settings = {}) {
     ? Math.min(300, Math.max(25, Math.round(speedValue)))
     : DEFAULT_PEEK_SETTINGS.animationSpeed;
   return { radius, feather, animationSpeed };
+}
+
+export function normalizeReadingMode(value) {
+  return READING_MODES.includes(value) ? value : DEFAULT_READING_MODE;
+}
+
+export function normalizeReadingOrder(value) {
+  return READING_ORDERS.includes(value) ? value : DEFAULT_READING_ORDER;
+}
+
+export function normalizeReaderPreferences(preferences = {}) {
+  return {
+    mode: normalizeReadingMode(preferences?.mode),
+    order: normalizeReadingOrder(preferences?.order),
+    fit: normalizePageFit(preferences?.fit),
+    pageAnimation: preferences?.pageAnimation !== false,
+    // Focus mode dims non-current pages. Toggleable so the dim (an extra
+    // opacity/compositing change) can be ruled in/out when diagnosing jank.
+    focusDim: preferences?.focusDim !== false
+  };
+}
+
+export const PAGE_FIT_MODES = Object.freeze(['screen', 'fill']);
+
+export const DEFAULT_PAGE_FIT = 'screen';
+
+export function normalizePageFit(value) {
+  return value === 'fill' ? 'fill' : DEFAULT_PAGE_FIT;
+}
+
+export function isHorizontalReadingOrder(order) {
+  return normalizeReadingOrder(order) !== 'ttb';
+}
+
+// Resolves the on-screen box for one page, in viewport pixels. `aspect` is
+// width / height. `screen` contains the whole page inside the viewport (the
+// default). `fill` fills the cross axis of the reading direction: height when
+// reading left/right, width when reading top/bottom.
+export function computePageBox({ aspect, fit, order, viewportWidth, viewportHeight }) {
+  const viewportW = Math.max(1, Number(viewportWidth) || 1);
+  const viewportH = Math.max(1, Number(viewportHeight) || 1);
+  const ratio = Number(aspect) > 0 ? Number(aspect) : 0.7;
+  if (normalizePageFit(fit) === 'fill') {
+    if (isHorizontalReadingOrder(order)) return { width: viewportH * ratio, height: viewportH };
+    return { width: viewportW, height: viewportW / ratio };
+  }
+  if (ratio >= viewportW / viewportH) return { width: viewportW, height: viewportW / ratio };
+  return { width: viewportH * ratio, height: viewportH };
+}
+
+// Converts a physical movement on the reading axis (right/down = +1) into a
+// logical page step where +1 advances to the next page. Right-to-left reading
+// mirrors the horizontal axis so the page that follows appears to the left.
+export function getLogicalPageStep(order, physicalStep) {
+  const step = Math.sign(Number(physicalStep) || 0);
+  if (!step) return 0;
+  return normalizeReadingOrder(order) === 'rtl' ? -step : step;
 }
 
 export function parseReaderFile(file, index) {

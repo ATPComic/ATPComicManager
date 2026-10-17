@@ -17,7 +17,7 @@ const emit = defineEmits(['change', 'update:modelValue', 'close']);
 const activeCategoryId = ref(null);
 
 const selectedCount = computed(() => (
-  Object.values(props.modelValue).reduce((count, values) => count + (values?.length ?? 0), 0)
+  Object.values(props.modelValue).reduce((count, values) => count + values.length, 0)
 ));
 const activeCategory = computed(() => (
   props.categories.find((category) => category.id === activeCategoryId.value)
@@ -99,3 +99,66 @@ function clear() {
         </div>
 
 </template>
+
+<style>
+.tag-filter-panel { width: min(620px, calc(100vw - 32px)); min-height: 230px; max-height: min(520px, calc(100vh - 120px)); display: grid; grid-template-columns: minmax(160px, .8fr) minmax(260px, 1.5fr); overflow: hidden; }
+.tag-filter-categories { padding: 10px; border-right: 1px solid var(--outline-soft); background: var(--surface-high); }
+.tag-filter-categories > .var-badge { width: 100%; display: flex; margin: 2px 0; }
+.tag-category-filter-badge { width: auto; min-width: 18px; display: inline-flex; margin: 0; }
+.tag-filter-categories .var-button { min-height: 42px; justify-content: flex-start; border-radius: 14px !important; color: var(--muted) !important; }
+.tag-filter-categories .var-button.active { color: var(--tag-on-container) !important; background: var(--tag-container) !important; }
+.tag-filter-categories .var-button__content { width: 100%; display: flex; align-items: center; justify-content: flex-start; gap: 9px; }
+.tag-filter-categories .var-button__content > span:nth-child(2) { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.tag-filter-values { min-width: 0; overflow: auto; padding: 16px; }
+.tag-filter-values > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.tag-filter-category-title { min-width: 0; display: inline-flex; align-items: center; }
+.tag-filter-values .tag-assignment-picker { width: 100%; }
+
+@media (max-width: 760px) {
+  .tag-filter-panel {
+    width: calc(100vw - 16px);
+    min-height: 0;
+    max-height: min(70dvh, 560px);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 58px minmax(180px, 1fr);
+  }
+  .tag-filter-categories {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 7px;
+    border-right: 0;
+    border-bottom: 1px solid var(--outline-soft);
+    scrollbar-width: none;
+    touch-action: pan-x;
+  }
+  .tag-filter-categories::-webkit-scrollbar { display: none; }
+  .tag-filter-categories > .var-badge { width: auto; min-width: max-content; margin: 0; }
+  .tag-filter-categories .var-button { min-width: max-content; min-height: 44px; padding-inline: 12px !important; }
+  .tag-filter-values { padding: 12px; }
+  .tag-filter-values > header { margin-bottom: 8px; }
+}
+
+@media (max-width: 760px) and (orientation: portrait) {
+  .tag-filter-panel {
+    width: calc(100vw - 16px);
+    max-height: min(70dvh, 560px);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 58px minmax(180px, 1fr);
+  }
+  .tag-filter-categories {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 7px;
+    border-right: 0;
+    border-bottom: 1px solid var(--outline-soft);
+    scrollbar-width: none;
+  }
+  .tag-filter-categories > .var-badge { width: auto; min-width: max-content; margin: 0; }
+  .tag-filter-categories .var-button { min-width: max-content; }
+  .tag-filter-values { padding: 12px; }
+}
+</style>

@@ -111,3 +111,43 @@ defineExpose({ setState });
     </div>
   </div>
 </template>
+
+<style>
+.reader-variants {
+  width: min(620px, 52vw);
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(104px, 1fr) auto minmax(104px, 1fr);
+  align-items: center;
+  justify-self: center;
+  gap: 8px;
+}
+.reader-variant-left { min-width: 0; justify-self: end; }
+.reader-variant-right { min-width: 0; justify-self: start; }
+.reader-variant-buttons { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.reader-variant-buttons::-webkit-scrollbar { display: none; }
+.reader-variants .var-segmented-button { min-width: 40px; }
+.reader-peek-target-menu { display: inline-flex; flex: 0 0 auto; }
+.reader-peek-target-trigger {
+  min-width: 64px !important;
+  max-width: 112px;
+  height: 32px !important;
+  padding-inline: 9px !important;
+  border-radius: 9999px !important;
+  color: var(--muted) !important;
+  background: var(--surface-high) !important;
+}
+.reader-peek-target-trigger.overridden { color: var(--on-secondary-container) !important; background: var(--secondary-container) !important; }
+.reader-peek-target-trigger.none { color: var(--muted) !important; background: var(--surface-high) !important; box-shadow: inset 0 0 0 1px var(--outline); }
+.reader-peek-target-trigger .var-button__content { min-width: 0; display: inline-flex; align-items: center; gap: 4px; }
+.reader-peek-target-trigger strong { max-width: 94px; overflow: hidden; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 760px) {
+  .reader-variants { grid-column: 1 / -1; grid-row: 2; width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr); gap: 4px; }
+  .reader-variant-left { justify-self: start; }
+  .reader-variant-right { justify-self: end; }
+  .reader-variant-buttons { max-width: 100%; justify-self: center; }
+  .reader-peek-target-trigger { min-width: 70px !important; height: 38px !important; }
+  .reader-variants .var-segmented-button { min-width: 42px; min-height: 38px; }
+}
+</style>

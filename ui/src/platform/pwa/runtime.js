@@ -34,7 +34,7 @@ function database(operation, state) {
   return new Promise((resolve, reject) => {
     const id = ++nextId;
     requests.set(id, { resolve, reject });
-    worker.postMessage({ id, operation, state, base: import.meta.env?.BASE_URL ?? '/' });
+    worker.postMessage({ id, operation, state, base: import.meta.env.BASE_URL });
   });
 }
 
@@ -64,7 +64,7 @@ async function persist(next) {
   return structuredClone(state);
 }
 
-const PAGES_BASE = import.meta.env?.BASE_URL ?? '/';
+const PAGES_BASE = import.meta.env.BASE_URL;
 
 export async function resetPagesData() {
   try { worker?.terminate(); } catch { /* The worker may already be stopped. */ }

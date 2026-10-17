@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Peek mask reproduction · strip mask vs viewport mask</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.4 system-ui, sans-serif; color: #e6e7ea; background: #101114; }
+  .bar { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; padding: 10px 14px; background: #1d1e22; border-bottom: 1px solid #33353c; position: sticky; top: 0; z-index: 10; }
+  .bar label { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+  .bar output { font-variant-numeric: tabular-nums; color: #9fd4ff; min-width: 3ch; }
+  select, input[type=range] { accent-color: #7cb8ff; }
+  .stage { padding: 14px; display: grid; gap: 14px; }
+  .panel { border: 1px solid #33353c; border-radius: 10px; overflow: hidden; background: #0b0c0e; }
+  .panel > h2 { margin: 0; padding: 8px 12px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #9aa0aa; background: #17181c; border-bottom: 1px solid #33353c; }
+  /* --- shared reader scaffolding (mirrors ui/src/styles/style.css) --- */
+  .reader-viewport { position: relative; min-width: 0; height: 560px; overflow: hidden; touch-action: none; background: #08090a; }
+  .reader-plane { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 8px; transform-origin: 0 0; }
+  .reader-page { position: relative; flex: 0 0 auto; overflow: hidden; background: #26282e; }
+
+  /* --- CURRENT: mask on a strip-sized element that lives inside .reader-plane --- */
+  .reader-peek-plane--strip { position: absolute; left: 0; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; pointer-events: none; }
+  .reader-peek-page { flex: 0 0 auto; overflow: hidden; }
+  .peek-art { display: block; width: 100%; height: 100%; }
+
+  /* --- PROPOSED: mask on a viewport-sized layer; content in a transformed track --- */
+  .reader-peek-mask { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; }
+  .reader-peek-track { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 8px; transform-origin: 0 0; }
+
+  .hud { position: absolute; left: 8px; bottom: 8px; z-index: 5; font-size: 11px; color: #9fd4ff; background: rgba(0,0,0,.6); padding: 4px 7px; border-radius: 6px; pointer-events: none; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <label>Pages
+    <select id="count">
+      <option>1</option><option>10</option><option selected>50</option><option>100</option><option>200</option>
+    </select>
+  </label>
+  <label>Scale <input id="scale" type="range" min="0.25" max="3" step="0.05" value="1" /><output id="scaleOut">1.00</output></label>
+  <label>Radius <input id="radius" type="range" min="24" max="400" step="1" value="160" /><output id="radiusOut">160</output></label>
+  <label>Feather <input id="feather" type="range" min="0" max="120" step="1" value="24" /><output id="featherOut">24</output></label>
+  <label>Structure
+    <select id="structure">
+      <option value="strip" selected>current · strip mask</option>
+      <option value="viewport">proposed · viewport mask</option>
+    </select>
+  </label>
+  <label><input id="hidden" type="checkbox" /> hide base (mask only)</label>
+</div>
+
+<div class="stage">
+  <div class="panel">
+    <h2>Reproduction</h2>
+    <div class="reader-viewport" id="viewport">
+      <div class="reader-plane" id="plane"></div>
+      <div class="hud" id="hud"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PAGE_W = 480;
+const PAGE_H = 720;
+
+const viewport = document.getElementById('viewport');
+const plane = document.getElementById('plane');
+const hud = document.getElementById('hud');
+const els = {
+  count: document.getElementById('count'),
+  scale: document.getElementById('scale'),
+  scaleOut: document.getElementById('scaleOut'),
+  radius: document.getElementById('radius'),
+  radiusOut: document.getElementById('radiusOut'),
+  feather: document.getElementById('feather'),
+  featherOut: document.getElementById('featherOut'),
+  structure: document.getElementById('structure'),
+  hidden: document.getElementById('hidden')
+};
+
+// Distinct base vs peek artwork so the mask edge is obvious.
+function makeArt(color, label, w = PAGE_W, h = PAGE_H) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, w, h);
+  grad.addColorStop(0, color);
+  grad.addColorStop(1, '#0b0c0e');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, w - 2, h - 2);
+  ctx.fillStyle = 'rgba(255,255,255,.85)';
+  ctx.font = '600 34px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(label, w / 2, h / 2);
+  const img = document.createElement('img');
+  img.className = 'peek-art';
+  img.draggable = false;
+  img.src = canvas.toDataURL('image/png');
+  return img;
+}
+
+const state = {
+  pages: [],
+  transform: { x: 0, y: 0, scale: 1 },
+  pointer: { x: 320, y: 260 }
+};
+
+function build() {
+  const count = Number(els.count.value);
+  plane.replaceChildren();
+  viewport.querySelector('.reader-peek-plane--strip')?.remove();
+  const oldMask = viewport.querySelector('.reader-peek-mask');
+  oldMask?.remove();
+
+  const baseFragment = document.createDocumentFragment();
+  const stripPeek = document.createElement('div');
+  stripPeek.className = 'reader-peek-plane--strip';
+  const stripPeekFragment = document.createDocumentFragment();
+  const mask = document.createElement('div');
+  mask.className = 'reader-peek-mask';
+  const track = document.createElement('div');
+  track.className = 'reader-peek-track';
+
+  for (let i = 0; i < count; i += 1) {
+    const basePage = document.createElement('div');
+    basePage.className = 'reader-page';
+    basePage.style.width = PAGE_W + 'px';
+    basePage.style.height = PAGE_H + 'px';
+    basePage.append(makeArt('#2b3a55', `BASE ${i + 1}`));
+    baseFragment.append(basePage);
+
+    const peekPage = document.createElement('div');
+    peekPage.className = 'reader-peek-page';
+    peekPage.style.width = PAGE_W + 'px';
+    peekPage.style.height = PAGE_H + 'px';
+    peekPage.append(makeArt('#c0392b', `PEEK ${i + 1}`));
+    stripPeekFragment.append(peekPage);
+  }
+  plane.append(baseFragment);
+
+  if (els.structure.value === 'strip') {
+    stripPeek.append(stripPeekFragment);
+    plane.append(stripPeek);
+  } else {
+    track.append(stripPeekFragment);
+    mask.append(track);
+    viewport.append(mask);
+  }
+  state.pages = Array.from(plane.querySelectorAll('.reader-page'));
+  applyTransform();
+}
+
+function applyTransform() {
+  const { x, y, scale } = state.transform;
+  const t = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+  plane.style.transform = t;
+  const track = viewport.querySelector('.reader-peek-track');
+  if (track) track.style.transform = t;
+  plane.style.opacity = els.hidden.checked ? '0' : '';
+  updateMask();
+  updateHud();
+}
+
+function updateMask() {
+  const radius = Math.max(1, Number(els.radius.value));
+  const feather = Math.max(0, Number(els.feather.value));
+  const px = state.pointer.x;
+  const py = state.pointer.y;
+  const scale = state.transform.scale || 1;
+  const stripPeek = viewport.querySelector('.reader-peek-plane--strip');
+  const mask = viewport.querySelector('.reader-peek-mask');
+  if (stripPeek) {
+    // Current implementation: center expressed in the strip's local space and
+    // radius/feather pre-divided by the camera scale.
+    const x = (px - state.transform.x) / scale;
+    const y = (py - state.transform.y) / scale;
+    const r = Math.max(1, radius / scale);
+    const f = Math.max(0, feather / scale);
+    const image = `radial-gradient(circle at ${x}px ${y}px, #000 0 ${Math.max(0, r - f)}px, transparent ${r}px)`;
+    stripPeek.style.maskImage = image;
+    stripPeek.style.webkitMaskImage = image;
+  }
+  if (mask) {
+    // Proposed implementation: viewport-local coordinates, no scale math.
+    const image = `radial-gradient(circle at ${px}px ${py}px, #000 0 ${Math.max(0, radius - feather)}px, transparent ${radius}px)`;
+    mask.style.maskImage = image;
+    mask.style.webkitMaskImage = image;
+  }
+}
+
+function updateHud() {
+  const stripPeek = viewport.querySelector('.reader-peek-plane--strip');
+  const mask = viewport.querySelector('.reader-peek-mask');
+  const target = stripPeek ?? mask;
+  const rect = target?.getBoundingClientRect();
+  const w = target ? target.offsetWidth : 0;
+  hud.textContent = `structure=${els.structure.value} · pages=${state.pages.length} · maskEl=${w}×${target ? target.offsetHeight : 0}px · renderedW=${rect ? Math.round(rect.width) : 0}px · scale=${state.transform.scale.toFixed(2)}`;
+}
+
+// center the strip on load / on rebuild
+function center() {
+  const first = state.pages[0];
+  if (!first) return;
+  const vw = viewport.clientWidth;
+  const vh = viewport.clientHeight;
+  const scale = state.transform.scale;
+  state.transform.x = vw / 2 - (first.offsetLeft + first.offsetWidth / 2) * scale;
+  state.transform.y = vh / 2 - (first.offsetTop + first.offsetHeight / 2) * scale;
+  applyTransform();
+}
+
+els.count.addEventListener('change', () => { build(); center(); });
+els.structure.addEventListener('change', () => { build(); center(); });
+els.hidden.addEventListener('change', applyTransform);
+for (const key of ['scale', 'radius', 'feather']) {
+  els[key].addEventListener('input', () => {
+    els[key + 'Out'].value = key === 'scale' ? Number(els[key].value).toFixed(2) : els[key].value;
+    if (key === 'scale') {
+      state.transform.scale = Number(els.scale.value);
+      center();
+    } else {
+      updateMask();
+      updateHud();
+    }
+  });
+}
+viewport.addEventListener('pointermove', (event) => {
+  const rect = viewport.getBoundingClientRect();
+  state.pointer = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  updateMask();
+  updateHud();
+});
+viewport.addEventListener('wheel', (event) => {
+  event.preventDefault();
+  const rect = viewport.getBoundingClientRect();
+  const px = event.clientX - rect.left;
+  const py = event.clientY - rect.top;
+  const factor = Math.exp(-event.deltaY * 0.0015);
+  const old = state.transform.scale;
+  const next = Math.min(3, Math.max(0.25, old * factor));
+  state.transform.x = px - (px - state.transform.x) / old * next;
+  state.transform.y = py - (py - state.transform.y) / old * next;
+  state.transform.scale = next;
+  els.scale.value = String(next);
+  els.scaleOut.value = next.toFixed(2);
+  applyTransform();
+  updateHud();
+}, { passive: false });
+
+build();
+center();
+// Expose a tiny API so an automated test can drive the fixture.
+window.__repro = { state, build, center, updateMask, applyTransform, els };
+</script>
+</body>
+</html>

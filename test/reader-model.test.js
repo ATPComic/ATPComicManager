@@ -200,9 +200,13 @@ test('peek settings have stable defaults and safe bounds', () => {
 });
 
 test('reader preferences default to single page, left-to-right, whole-page fit and animation', () => {
-  assert.deepEqual(normalizeReaderPreferences(), { mode: 'single', order: 'ltr', fit: 'screen', pageAnimation: true });
-  assert.deepEqual(normalizeReaderPreferences({ mode: 'focus', order: 'ttb', fit: 'fill', pageAnimation: false }), { mode: 'focus', order: 'ttb', fit: 'fill', pageAnimation: false });
-  assert.deepEqual(normalizeReaderPreferences({ mode: 'bogus', order: 'sideways', fit: 'nope' }), { mode: 'single', order: 'ltr', fit: 'screen', pageAnimation: true });
+  const defaults = { mode: 'single', order: 'ltr', fit: 'screen', pageAnimation: true, focusDim: true };
+  assert.deepEqual(normalizeReaderPreferences(), defaults);
+  assert.deepEqual(
+    normalizeReaderPreferences({ mode: 'focus', order: 'ttb', fit: 'fill', pageAnimation: false, focusDim: false }),
+    { mode: 'focus', order: 'ttb', fit: 'fill', pageAnimation: false, focusDim: false }
+  );
+  assert.deepEqual(normalizeReaderPreferences({ mode: 'bogus', order: 'sideways', fit: 'nope' }), defaults);
 });
 
 test('page fit normalizes invalid values to whole page', () => {

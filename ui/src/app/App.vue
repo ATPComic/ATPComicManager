@@ -108,7 +108,7 @@ const nameDraft = ref('');
 const settingsDialogOpen = ref(false);
 const recognitionDialogOpen = ref(false);
 const recognitionDraft = reactive({ version: 1, rules: [], episodeDates: {}, identityMarkers: [] });
-const settingsDraft = reactive({ radius: 144, feather: 32, animationSpeed: 100, mode: 'single', order: 'ltr', fit: 'screen', pageAnimation: true });
+const settingsDraft = reactive({ radius: 144, feather: 32, animationSpeed: 100, mode: 'single', order: 'ltr', fit: 'screen', pageAnimation: true, focusDim: true });
 const readerModeOptions = [
   { label: t('readerModeSingle'), value: 'single', ripple: true },
   { label: t('readerModeContinuous'), value: 'continuous', ripple: true },
@@ -1270,6 +1270,11 @@ onBeforeUnmount(() => {
           <span class="settings-label">{{ t('pageAnimation') }}</span>
           <var-switch v-model="settingsDraft.pageAnimation" />
           <small>{{ t('pageAnimationHelp') }}</small>
+        </div>
+        <div class="settings-field settings-switch">
+          <span class="settings-label">{{ t('focusDim') }}</span>
+          <var-switch v-model="settingsDraft.focusDim" />
+          <small>{{ t('focusDimHelp') }}</small>
         </div>
         <div class="settings-divider">{{ t('peekSettings') }}</div>
         <div class="settings-field">

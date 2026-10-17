@@ -50,7 +50,10 @@ export function normalizeReaderPreferences(preferences = {}) {
     mode: normalizeReadingMode(preferences?.mode),
     order: normalizeReadingOrder(preferences?.order),
     fit: normalizePageFit(preferences?.fit),
-    pageAnimation: preferences?.pageAnimation !== false
+    pageAnimation: preferences?.pageAnimation !== false,
+    // Focus mode dims non-current pages. Toggleable so the dim (an extra
+    // opacity/compositing change) can be ruled in/out when diagnosing jank.
+    focusDim: preferences?.focusDim !== false
   };
 }
 

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Peek mask integration harness · real public/reader.js</title>
+<link rel="stylesheet" href="/ui/src/styles/style.css" />
+<style>
+  :root { --titlebar-height: 40px; --text: #e6e7ea; --muted: #9aa0aa; --outline: #33353c; --outline-soft: #26282e; --surface-high: #22242a; --surface-highest: #2a2d34; --primary: #7cb8ff; --secondary-container: #2a3a55; --on-secondary-container: #cfe4ff; }
+  html, body { margin: 0; height: 100%; background: #08090a; }
+  #log { position: fixed; z-index: 200; left: 8px; bottom: 8px; max-width: 46ch; max-height: 32vh; overflow: auto; font: 11px/1.4 ui-monospace, monospace; color: #b8ffca; background: rgba(0,0,0,.72); padding: 6px 8px; border-radius: 6px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<!-- Minimal markup with every hook ComicReader queries. -->
+<section class="reader" hidden aria-label="read episode">
+  <header class="reader-bar">
+    <div class="reader-leading">
+      <button data-reader-close>close</button>
+      <nav class="reader-breadcrumb">
+        <span data-reader-collection hidden></span>
+        <span data-reader-breadcrumb-separator hidden></span>
+        <strong data-reader-title></strong>
+      </nav>
+      <span class="reader-meta" data-reader-meta></span>
+    </div>
+    <div class="reader-peek-controls">
+      <button data-reader-peek-toggle>peek</button>
+    </div>
+    <div class="reader-tools">
+      <button data-reader-zoom-out>−</button>
+      <button data-reader-fit>fit</button>
+      <button data-reader-zoom-in>+</button>
+      <button data-reader-fullscreen>full</button>
+      <button data-reader-tags>tags</button>
+    </div>
+  </header>
+  <div class="reader-stage">
+    <div class="reader-viewport" data-reader-viewport>
+      <div class="reader-plane" data-reader-plane></div>
+    </div>
+  </div>
+</section>
+<pre id="log"></pre>
+
+<script type="module">
+import { ComicReader } from '/public/reader.js';
+import { setReaderAssetUrlResolver } from '/public/reader-model.js';
+
+const logEl = document.getElementById('log');
+const log = (line) => { logEl.textContent += `${line}\n`; logEl.scrollTop = logEl.scrollHeight; };
+window.addEventListener('error', (e) => log(`ERROR: ${e.message}`));
+window.addEventListener('unhandledrejection', (e) => log(`REJECTION: ${e.reason?.message ?? e.reason}`));
+
+const PAGE_W = 420;
+const PAGE_H = 620;
+
+function makeArtUrl(color, label) {
+  const canvas = document.createElement('canvas');
+  canvas.width = PAGE_W; canvas.height = PAGE_H;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, PAGE_W, PAGE_H);
+  grad.addColorStop(0, color); grad.addColorStop(1, '#0b0c0e');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+  ctx.strokeStyle = 'rgba(255,255,255,.2)'; ctx.lineWidth = 3; ctx.strokeRect(1.5, 1.5, PAGE_W - 3, PAGE_H - 3);
+  ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.font = '600 30px system-ui, sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(label, PAGE_W / 2, PAGE_H / 2);
+  return canvas.toDataURL('image/png');
+}
+
+let dataUrls = [];
+let episodes = {};
+let sequence = [];
+
+// Build one episode with `count` pages in each of two variants (a=blue base, b=red peek).
+function makeEpisode(id, count) {
+  const files = [];
+  const urls = [];
+  for (let p = 1; p <= count; p += 1) {
+    files.push({ name: `${id}_a${String(p).padStart(3, '0')}.jpg`, variant: 'a', pageNumber: p });
+    urls.push(makeArtUrl('#2b3a55', `A${p}`));
+    files.push({ name: `${id}_b${String(p).padStart(3, '0')}.jpg`, variant: 'b', pageNumber: p });
+    urls.push(makeArtUrl('#c0392b', `B${p}`));
+  }
+  return { episode: { id, title: `Episode ${id}`, files }, urls };
+}
+
+function install(count) {
+  const { episode, urls } = makeEpisode('00000001', count);
+  dataUrls = urls;
+  episodes = { '00000001': episode };
+  sequence = ['00000001'];
+}
+
+setReaderAssetUrlResolver((kind, episodeId, index) => dataUrls[index] ?? dataUrls[0]);
+
+const root = document.querySelector('.reader');
+const reader = new ComicReader(root, {
+  getEpisode: (id) => episodes[id] ?? null,
+  getSequence: () => sequence,
+  getCollection: () => null,
+  settings: {},
+  onVariants: () => {},
+  onClose: () => true
+});
+
+window.__it = {
+  reader,
+  root,
+  install,
+  async open(count = 20, mode = 'single', order = 'ltr') {
+    install(count);
+    reader.setReaderSettings({ mode, order, fit: 'screen', pageAnimation: false });
+    await reader.open('00000001', 0);
+    return { pages: reader.pages.length, peek: reader.peekPlane?.className ?? null, mode, order };
+  },
+  setPointer(x, y) {
+    reader.pointer = { x, y };
+    reader.hasPointerPosition = true;
+    reader.updatePeekMask();
+    return { pointer: reader.pointer, mask: reader.peekPlane?.style.maskImage };
+  },
+  zoom(factor, x = 300, y = 240) {
+    reader.zoomAt(factor, x, y);
+    return { scale: reader.transform.scale };
+  },
+  fit() { reader.fit(); return { scale: reader.transform.scale }; },
+  snapshot() {
+    const mask = document.querySelector('.reader-peek-mask');
+    const track = document.querySelector('.reader-peek-track');
+    const plane = document.querySelector('.reader-plane');
+    return {
+      pages: reader.pages.length,
+      maskLayer: mask ? { w: mask.offsetWidth, h: mask.offsetHeight } : null,
+      trackTransform: track?.style.transform ?? null,
+      planeTransform: plane?.style.transform ?? null,
+      peekOpacity: mask?.style.opacity ?? null,
+      peekMask: mask?.style.maskImage ?? null,
+      scale: reader.transform.scale,
+      entry: reader.entry?.page
+    };
+  }
+};
+
+// Auto-open a default scene so the harness is visible on load.
+window.__it.open(20, 'single', 'ltr').then((r) => {
+  log(`opened: ${JSON.stringify(r)}`);
+  window.__it.setPointer(300, 240);
+}).catch((e) => log(`open failed: ${e.message}`));
+</script>
+</body>
+</html>

@@ -180,3 +180,91 @@ test('two touch points determine Peek center and diameter', () => {
   assert.deepEqual(subject.pointer, { x: 100, y: 100 });
   assert.equal(radius, 60);
 });
+
+function makeMaskSubject() {
+  return {
+    peekPlane: { style: {} },
+    peekTransitionStage: null,
+    peekEnabled: true,
+    currentPeekEntry: () => ({ page: 1 }),
+    pointer: { x: 100, y: 80 },
+    peekRadiusCurrent: 160,
+    peekRadius: 112,
+    peekFeather: 24,
+    // A non-trivial camera, to prove the mask ignores it.
+    transform: { x: -9999, y: -8888, scale: 4 }
+  };
+}
+
+test('Peek mask is expressed in viewport coordinates and ignores the camera transform', () => {
+  const subject = makeMaskSubject();
+  ComicReader.prototype.updatePeekMask.call(subject);
+  const mask = subject.peekPlane.style.maskImage;
+  assert.equal(subject.peekPlane.style.opacity, '1');
+  assert.match(mask, /radial-gradient\(circle at 100px 80px,/);
+  // radius/feather are used as-is (no division by the camera scale).
+  assert.match(mask, /#000 0 136px/);
+  assert.match(mask, /transparent 160px/);
+});
+
+test('Peek mask collapses to opacity 0 when Peek is unavailable', () => {
+  const subject = makeMaskSubject();
+  subject.peekEnabled = false;
+  ComicReader.prototype.updatePeekMask.call(subject);
+  assert.equal(subject.peekPlane.style.opacity, '0');
+  assert.equal(subject.peekPlane.style.maskImage, undefined);
+});
+
+function makeLayoutSubject(readingOrder = 'ltr') {
+  return {
+    readingOrder,
+    pages: [
+      { width: 100, height: 200 },
+      { width: 100, height: 200 },
+      { width: 100, height: 200 }
+    ],
+    transform: { x: 0, y: 0, scale: 1 },
+    windowOrigin: null
+  };
+}
+
+test('page layout accumulates offsets along the reading axis', () => {
+  const horizontal = makeLayoutSubject('ltr');
+  ComicReader.prototype.computeLayout.call(horizontal);
+  assert.deepEqual(horizontal.layout.offsets, [0, 108, 216]);
+  assert.deepEqual(horizontal.layout.sizes, [100, 100, 100]);
+  assert.equal(horizontal.layout.dir, 1);
+  assert.equal(horizontal.layout.horizontal, true);
+
+  const rtl = makeLayoutSubject('rtl');
+  ComicReader.prototype.computeLayout.call(rtl);
+  assert.equal(rtl.layout.dir, -1);
+
+  const ttb = makeLayoutSubject('ttb');
+  ComicReader.prototype.computeLayout.call(ttb);
+  assert.deepEqual(ttb.layout.offsets, [0, 208, 416]);
+  assert.equal(ttb.layout.horizontal, false);
+});
+
+test('nearest-page lookup uses page centers, not DOM geometry', () => {
+  const subject = makeLayoutSubject('ltr');
+  ComicReader.prototype.computeLayout.call(subject);
+  assert.equal(ComicReader.prototype.findNearestIndex.call(subject, 10), 0);
+  assert.equal(ComicReader.prototype.findNearestIndex.call(subject, 150), 1);
+  assert.equal(ComicReader.prototype.findNearestIndex.call(subject, 260), 2);
+});
+
+test('page slots are placed at content coordinates and mirror for RTL', () => {
+  const ltr = makeLayoutSubject('ltr');
+  ComicReader.prototype.computeLayout.call(ltr);
+  ltr.contentCross = 260;
+  assert.deepEqual(ComicReader.prototype.slotPosition.call(ltr, 0), { left: 0, top: 30 });
+  assert.deepEqual(ComicReader.prototype.slotPosition.call(ltr, 2), { left: 216, top: 30 });
+
+  const rtl = makeLayoutSubject('rtl');
+  ComicReader.prototype.computeLayout.call(rtl);
+  rtl.contentCross = 260;
+  // RTL mirrors on the axis: last page is left-most, first page is right-most.
+  assert.deepEqual(ComicReader.prototype.slotPosition.call(rtl, 0), { left: rtl.layout.total - 100, top: 30 });
+  assert.deepEqual(ComicReader.prototype.slotPosition.call(rtl, 2), { left: 0, top: 30 });
+});

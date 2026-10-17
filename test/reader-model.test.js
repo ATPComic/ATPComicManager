@@ -193,10 +193,10 @@ test('reader side paging only targets visible black margins', () => {
 });
 
 test('peek settings have stable defaults and safe bounds', () => {
-  assert.deepEqual(normalizePeekSettings(), { radius: 112, feather: 14, animationSpeed: 100 });
-  assert.deepEqual(normalizePeekSettings({ radius: 160.4, feather: 28.2, animationSpeed: 175 }), { radius: 160, feather: 28, animationSpeed: 175 });
-  assert.deepEqual(normalizePeekSettings({ radius: 10, feather: 80, animationSpeed: 5 }), { radius: 24, feather: 24, animationSpeed: 25 });
-  assert.deepEqual(normalizePeekSettings({ radius: 9999, feather: -5, animationSpeed: 900 }), { radius: 600, feather: 0, animationSpeed: 300 });
+  assert.deepEqual(normalizePeekSettings(), { radius: 112, feather: 14, animationSpeed: 100, opacity: 50 });
+  assert.deepEqual(normalizePeekSettings({ radius: 160.4, feather: 28.2, animationSpeed: 175, opacity: 45.6 }), { radius: 160, feather: 28, animationSpeed: 175, opacity: 46 });
+  assert.deepEqual(normalizePeekSettings({ radius: 10, feather: 80, animationSpeed: 5, opacity: 0 }), { radius: 24, feather: 24, animationSpeed: 25, opacity: 10 });
+  assert.deepEqual(normalizePeekSettings({ radius: 9999, feather: -5, animationSpeed: 900, opacity: 500 }), { radius: 600, feather: 0, animationSpeed: 300, opacity: 100 });
 });
 
 test('reader preferences default to single page, left-to-right, whole-page fit and animation', () => {

@@ -26,7 +26,7 @@ import {
   tagCategoryColor,
   tagCategoryStyle
 } from '../lib/tag-colors.js';
-import { locale, t } from '../../../public/i18n.js';
+import { languageOptions, locale, t } from '../../../public/i18n.js';
 import { pagesLocalStorageKey } from '../../../public/pages-assets-db.js';
 import { migrateTagMap, normalizeTagDefinition, relocateTagDefinition } from '../../../public/tag-model.js';
 import { createEmptyTagState } from '../../../public/tag-state.js';
@@ -43,12 +43,7 @@ const colorMenuId = ref(null);
 const draggedCategoryIndex = ref(null);
 const categoryDropIndex = ref(null);
 
-const localeOptions = [
-  { label: t('languageEnglish'), value: 'en' },
-  { label: t('languageJapanese'), value: 'ja' },
-  { label: t('languageChineseSimplified'), value: 'zh-CN' },
-  { label: t('languageChineseTraditional'), value: 'zh-TW' }
-];
+const localeOptions = languageOptions;
 
 function createStableId(prefix) {
   return `${prefix}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;

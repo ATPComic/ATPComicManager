@@ -160,10 +160,6 @@ const dictionaries = {
     recognitionSaved: '识别规则已保存并重新扫描',
     tools: '工具',
     language: '语言',
-    languageChineseSimplified: '中文（简体）',
-    languageChineseTraditional: '中文（繁體）',
-    languageEnglish: 'English',
-    languageJapanese: '日本語',
     cancel: '取消',
     save: '保存',
     close: '关闭',
@@ -172,6 +168,8 @@ const dictionaries = {
     radiusHelp: '圆圈在屏幕上的像素半径',
     feather: '边缘羽化',
     featherHelp: '从清晰区域到边缘透明的过渡宽度',
+    peekOpacity: '不透明度',
+    peekOpacityHelp: '悬停透显的不透明度（10–100，默认 50）。按住鼠标左键时临时恢复为 100。',
     animationSpeed: '动画速度',
     speedHelp: '百分比；100 为默认速度，数值越大越快',
     closeReader: '关闭阅读器',
@@ -497,10 +495,6 @@ const dictionaries = {
     recognitionSaved: '識別規則已儲存並重新掃描',
     tools: '工具',
     language: '語言',
-    languageChineseSimplified: '中文（簡體）',
-    languageChineseTraditional: '中文（繁體）',
-    languageEnglish: 'English',
-    languageJapanese: '日本語',
     cancel: '取消',
     save: '儲存',
     close: '關閉',
@@ -509,6 +503,8 @@ const dictionaries = {
     radiusHelp: '圓圈在螢幕上的像素半徑',
     feather: '邊緣羽化',
     featherHelp: '從清晰區域到邊緣透明的過渡寬度',
+    peekOpacity: '不透明度',
+    peekOpacityHelp: '懸停透顯的不透明度（10–100，預設 50）。按住滑鼠左鍵時暫時恢復為 100。',
     animationSpeed: '動畫速度',
     speedHelp: '百分比；100 為預設速度，數值越大越快',
     closeReader: '關閉閱讀器',
@@ -834,10 +830,6 @@ const dictionaries = {
     recognitionSaved: 'Recognition rules saved and library rescanned',
     tools: 'Tools',
     language: 'Language',
-    languageChineseSimplified: '中文（简体）',
-    languageChineseTraditional: '中文（繁體）',
-    languageEnglish: 'English',
-    languageJapanese: '日本語',
     cancel: 'Cancel',
     save: 'Save',
     close: 'Close',
@@ -846,6 +838,8 @@ const dictionaries = {
     radiusHelp: 'Circle radius in screen pixels',
     feather: 'Edge feather',
     featherHelp: 'Width of the fade at the circle edge',
+    peekOpacity: 'Opacity',
+    peekOpacityHelp: 'Hover Peek opacity (10–100, default 50). Holding the left mouse button temporarily restores 100%.',
     animationSpeed: 'Animation speed',
     speedHelp: 'Percent; 100 is normal, higher is faster',
     closeReader: 'Close reader',
@@ -1171,10 +1165,6 @@ const dictionaries = {
     recognitionSaved: '認識ルールを保存して再スキャンしました',
     tools: 'ツール',
     language: '言語',
-    languageChineseSimplified: '中文（简体）',
-    languageChineseTraditional: '中文（繁體）',
-    languageEnglish: 'English',
-    languageJapanese: '日本語',
     cancel: 'キャンセル',
     save: '保存',
     close: '閉じる',
@@ -1183,6 +1173,8 @@ const dictionaries = {
     radiusHelp: '画面上の円の半径（px）',
     feather: '境界ぼかし',
     featherHelp: '円の端で透明になる幅',
+    peekOpacity: '不透明度',
+    peekOpacityHelp: 'ホバー時の透過表示の不透明度（10–100、既定 50）。マウスの左ボタンを押している間は一時的に 100% に戻ります。',
     animationSpeed: 'アニメーション速度',
     speedHelp: '100 が標準。大きいほど高速',
     closeReader: 'リーダーを閉じる',
@@ -1352,6 +1344,15 @@ const dictionaries = {
 };
 
 export const locale = detectLocale();
+
+// Language names are autonyms: they are never translated by the active locale,
+// so "中文（简体）" stays simplified in the Traditional Chinese UI.
+export const languageOptions = Object.freeze([
+  { label: 'English', value: 'en' },
+  { label: '日本語', value: 'ja' },
+  { label: '中文（简体）', value: 'zh-CN' },
+  { label: '中文（繁體）', value: 'zh-TW' }
+]);
 
 export function t(key, values = {}, language = locale) {
   const template = dictionaries[language]?.[key] ?? dictionaries.en[key] ?? key;

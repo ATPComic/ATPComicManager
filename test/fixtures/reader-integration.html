@@ -127,7 +127,7 @@ window.__it = {
     reader.pointer = { x, y };
     reader.hasPointerPosition = true;
     reader.updatePeekMask();
-    return { pointer: reader.pointer, mask: reader.peekPlane?.style.maskImage };
+    return { pointer: reader.pointer, radius: reader.peekPlane?.style.getPropertyValue('--peek-radius') };
   },
   zoom(factor, x = 300, y = 240) {
     reader.zoomAt(factor, x, y);
@@ -144,7 +144,7 @@ window.__it = {
       trackTransform: track?.style.transform ?? null,
       planeTransform: plane?.style.transform ?? null,
       peekOpacity: mask?.style.opacity ?? null,
-      peekMask: mask?.style.maskImage ?? null,
+      peekMask: mask?.style.getPropertyValue('--peek-radius') ?? null,
       scale: reader.transform.scale,
       entry: reader.entry?.page
     };

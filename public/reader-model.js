@@ -6,7 +6,7 @@ import {
 } from './variant-assignment-model.js';
 
 const SOURCE_IMAGE_PATTERN = /^(\d{8})_([a-z])(\d+)\.(?:jpe?g|png|webp|gif|bmp|tiff?|avif)$/i;
-export const DEFAULT_PEEK_SETTINGS = Object.freeze({ radius: 112, feather: 14, animationSpeed: 100 });
+export const DEFAULT_PEEK_SETTINGS = Object.freeze({ radius: 112, feather: 14, animationSpeed: 100, opacity: 50 });
 
 export const READING_MODES = Object.freeze(['single', 'continuous', 'focus']);
 
@@ -34,7 +34,13 @@ export function normalizePeekSettings(settings = {}) {
   const animationSpeed = Number.isFinite(speedValue)
     ? Math.min(300, Math.max(25, Math.round(speedValue)))
     : DEFAULT_PEEK_SETTINGS.animationSpeed;
-  return { radius, feather, animationSpeed };
+  // Peek is never fully transparent: 10% keeps the layer discoverable, while
+  // 100% (the default) is the classic opaque reveal.
+  const opacityValue = Number(settings.opacity);
+  const opacity = Number.isFinite(opacityValue)
+    ? Math.min(100, Math.max(10, Math.round(opacityValue)))
+    : DEFAULT_PEEK_SETTINGS.opacity;
+  return { radius, feather, animationSpeed, opacity };
 }
 
 export function normalizeReadingMode(value) {

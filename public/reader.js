@@ -22,8 +22,19 @@ const DEFAULT_ASPECT = 0.7;
 const DRAG_THRESHOLD = 6;
 // Gap between pages along the reading axis. Must match .reader-plane's old gap.
 const LAYOUT_GAP = 8;
-// Unified timing for fade animations and scroll step spacing.
+// Shared timing for page and Peek fade animations.
 const TIMING_MS = 250;
+// Extra pages mounted on each side of the visible range and decoded ahead of
+// time, so a page turn does not have to decode on demand.
+const PREFETCH_PAGES = 1;
+// Chromium converts a line-mode wheel delta to pixels at 100/3 px per line
+// (WHEEL_DELTA 120 -> 3 lines -> 100 px).
+const PX_PER_LINE = 100 / 3;
+// Horizontal mouse-wheel input has no browser-native momentum path. Follow its
+// accumulated target with a short exponential ease instead of issuing a new
+// smooth-scroll animation for every wheel event (which continually restarts it).
+const WHEEL_SCROLL_TAU_MS = 52;
+const WHEEL_SCROLL_EPSILON = 0.5;
 
 export class ComicReader {
   constructor(root, {
@@ -119,6 +130,8 @@ export class ComicReader {
     this.baseFitScale = 1;
     this.windowFrame = 0;
     this.scrollMirrorFrame = 0;
+    this.isScrolling = false;
+    this.scrollIdleTimer = 0;
     // Cumulative layout: page offsets/sizes along the reading axis. The native
     // scroller supplies the camera offset, so no window-origin bookkeeping is
     // needed any more. See computeLayout.
@@ -141,9 +154,23 @@ export class ComicReader {
     this.peekPressPointerId = null;
     this.wheelAccumulator = 0;
     this.wheelResetTimer = 0;
+    this.wheelScrollPending = 0;
+    this.wheelScrollFrame = 0;
+    this.wheelScrollLastTime = 0;
     this.wheelLocked = false;
     this.wheelLockTimer = 0;
+    this.scrollStepActive = false;
+    this.turning = false;
+    this.noFadeEntry = null;
     this.suppressCurrentUntil = 0;
+    // Serialize image decoding: large pages decoded back-to-back compete for
+    // CPU and show up as dropped frames.
+    this.decodeQueue = [];
+    this.decodeActive = 0;
+    this.decodeLimit = 1;
+    this.decodeSession = 0;
+    this.decodePromises = new WeakMap();
+    this.pendingLoads = 0;
     this.fullscreenRequested = false;
     this.fullscreenEdgeActive = false;
     this.fullscreenChromeTimer = 0;
@@ -232,6 +259,10 @@ export class ComicReader {
     this.peekPlane?.remove();
     this.peekPlane = null;
     this.peekTrack = null;
+    this.resetDecodeQueue();
+    this.pendingLoads = 0;
+    this.scrollStepActive = false;
+    this.turning = false;
     this.layout = null;
     this.mountedRange = null;
     this.positionsDirty = true;
@@ -251,9 +282,15 @@ export class ComicReader {
     clearTimeout(this.fullscreenChromeTimer);
     clearTimeout(this.wheelResetTimer);
     clearTimeout(this.wheelLockTimer);
+    clearTimeout(this.scrollIdleTimer);
+    this.isScrolling = false;
     this.wheelLocked = false;
     cancelAnimationFrame(this.fullscreenFitFrame);
     cancelAnimationFrame(this.peekAnimationFrame);
+    cancelAnimationFrame(this.wheelScrollFrame);
+    this.wheelScrollPending = 0;
+    this.wheelScrollFrame = 0;
+    this.wheelScrollLastTime = 0;
     this.peekAnimationResolve?.();
     this.peekAnimationResolve = null;
     this.peekRadiusCurrent = this.touchMode ? 0 : this.peekRadius;
@@ -301,6 +338,12 @@ export class ComicReader {
       this.peekRadiusTarget = this.touchMode ? 0 : this.peekRadius;
     }
     const preferences = normalizeReaderPreferences(settings);
+    if (preferences.mode !== this.readingMode || preferences.order !== this.readingOrder) {
+      cancelAnimationFrame(this.wheelScrollFrame);
+      this.wheelScrollFrame = 0;
+      this.wheelScrollPending = 0;
+      this.wheelScrollLastTime = 0;
+    }
     this.readingMode = preferences.mode;
     this.readingOrder = preferences.order;
     this.pageFit = preferences.fit;
@@ -324,6 +367,19 @@ export class ComicReader {
     this.root.dataset.readerOrder = this.readingOrder;
     this.root.dataset.readerFit = this.pageFit;
     this.root.classList.toggle('is-focus-dim', this.focusDim !== false);
+    const disableFocusFade = this.readingMode === 'focus' && !this.pageAnimation;
+    for (const slot of this.pages) {
+      for (const element of [slot.element, slot.peekElement]) {
+        element.style.transition = disableFocusFade ? 'none' : '';
+        if (disableFocusFade) element.classList.remove('is-loading');
+      }
+    }
+    // Continuous mode lets the scroller handle touch natively.
+    if (this.scroll) this.scroll.classList.toggle('is-native-pan', this.isContinuous());
+  }
+
+  shouldFadePageOnLoad(entry) {
+    return entry !== this.noFadeEntry && !(this.readingMode === 'focus' && !this.pageAnimation);
   }
 
   // ---------------------------------------------------------------- model
@@ -351,6 +407,8 @@ export class ComicReader {
   renderStrip(entry, { animate = false } = {}) {
     if (!this.model || !this.plane) return;
     this.stripToken += 1;
+    this.resetDecodeQueue();
+    this.pendingLoads = 0;
     const token = this.stripToken;
     this.endPeekPress({ releaseCapture: true });
     // A new strip starts at fit; drop any zoom from the previous strip.
@@ -582,13 +640,18 @@ export class ComicReader {
 
   mountWindow() {
     if (!this.pages.length) return;
+    // While a page-turn scroll / opacity animation runs, defer mounting (and
+    // therefore any image loading) of new pages until it ends. The current page
+    // is already preloaded/mounted; prefetch resumes afterwards.
+    if (this.turning || this.scrollStepActive) return;
     if (!this.layout) this.computeLayout();
     const center = this.currentIndex();
     if (center < 0) return;
-    // Mount only the strictly visible pages, always including the current page.
+    // Mount the visible pages plus one page on each side as a decode/prefetch
+    // buffer, always including the current page.
     const [vStart, vEnd] = this.visibleRange();
-    const start = Math.min(vStart, center);
-    const end = Math.max(vEnd, center + 1);
+    const start = Math.max(0, Math.min(vStart, center) - PREFETCH_PAGES);
+    const end = Math.min(this.pages.length, Math.max(vEnd, center + 1) + PREFETCH_PAGES);
     // Peek content mirrors the base window exactly.
     const peekStart = start;
     const peekEnd = end;
@@ -599,6 +662,7 @@ export class ComicReader {
       for (let index = 0; index < this.pages.length; index += 1) {
         const slot = this.pages[index];
         if (index >= start && index < end) {
+          slot.prefetch = index < vStart || index >= vEnd;
           if (slot.type !== 'page') this.mountPage(slot);
           this.ensureAttached(slot);
         } else if (Math.abs(index - center) <= this.releaseRadius()) {
@@ -627,6 +691,72 @@ export class ComicReader {
       for (let index = start; index < end; index += 1) this.setSlotPosition(this.pages[index], index);
       this.positionsDirty = false;
     }
+  }
+
+  // Serialize image decoding. `image.decode()` is off the critical path, but
+  // decoding several large pages at once still competes for CPU and surfaces as
+  // dropped frames. Lower priority jobs (prefetch) wait for current/visible.
+  queueDecode(image, priority, done, slot = null) {
+    let resolve;
+    const promise = new Promise((finish) => { resolve = finish; });
+    this.decodeQueue.push({ image, priority, done, slot, promise, resolve, priorityBoost: false });
+    this.decodeQueue.sort((a, b) => a.priority - b.priority);
+    this.pumpDecode();
+    return promise;
+  }
+
+  pumpDecode() {
+    for (const job of this.decodeQueue) {
+      if (job.priorityBoost) continue;
+      if (job.slot) {
+        job.priority = job.slot.type !== 'page'
+          ? 3
+          : job.slot.entry === this.entry ? 0 : job.slot.prefetch ? 2 : 1;
+      }
+    }
+    this.decodeQueue.sort((a, b) => a.priority - b.priority);
+    while (this.decodeActive < this.decodeLimit && this.decodeQueue.length) {
+      // Prefetch decodes are useful only while idle; let visible/current pages
+      // win during scrolling so background work cannot compete with animation.
+      if ((this.isScrolling || this.turning || this.scrollStepActive) && this.decodeQueue[0].priority >= 2) return;
+      const job = this.decodeQueue.shift();
+      if (job.slot && job.slot.type !== 'page') {
+        job.resolve();
+        continue;
+      }
+      this.decodeActive += 1;
+      const session = this.decodeSession;
+      const finish = () => {
+        this.decodeActive = Math.max(0, this.decodeActive - 1);
+        job.resolve();
+        if (session === this.decodeSession) job.done?.();
+        this.pumpDecode();
+        this.maybeUnlockWheel();
+      };
+      this.decodeImage(job.image).then(finish);
+    }
+    if (!this.decodeActive && !this.decodeQueue.length) this.maybeUnlockWheel();
+  }
+
+  resetDecodeQueue() {
+    this.decodeSession += 1;
+    for (const job of this.decodeQueue) job.resolve();
+    this.decodeQueue.length = 0;
+    this.decodePromises = new WeakMap();
+  }
+
+  decodeImage(image) {
+    if (!image?.decode) return Promise.resolve();
+    let promise = this.decodePromises.get(image);
+    if (!promise) {
+      try {
+        promise = Promise.resolve(image.decode()).catch(() => {});
+      } catch {
+        promise = Promise.resolve();
+      }
+      this.decodePromises.set(image, promise);
+    }
+    return promise;
   }
 
   refreshWindow() {
@@ -675,6 +805,51 @@ export class ComicReader {
     this.scroll.scrollTo({ left, top, behavior });
   }
 
+  queueWheelScroll(delta) {
+    const horizontal = isHorizontalReadingOrder(this.readingOrder);
+    if (this.prefersReducedMotion()) {
+      if (horizontal) this.scroll.scrollLeft += delta;
+      else this.scroll.scrollTop += delta;
+      return;
+    }
+    this.wheelScrollPending += delta;
+    if (!this.wheelScrollFrame) {
+      this.wheelScrollLastTime = 0;
+      this.wheelScrollFrame = requestAnimationFrame((time) => this.stepWheelScroll(time));
+    }
+  }
+
+  stepWheelScroll(time) {
+    this.wheelScrollFrame = 0;
+    const horizontal = isHorizontalReadingOrder(this.readingOrder);
+    if (!this.isContinuous() || !horizontal) {
+      this.wheelScrollPending = 0;
+      this.wheelScrollLastTime = 0;
+      return;
+    }
+    if (Math.abs(this.wheelScrollPending) < WHEEL_SCROLL_EPSILON) {
+      this.wheelScrollPending = 0;
+      this.wheelScrollLastTime = 0;
+      return;
+    }
+    const elapsed = this.wheelScrollLastTime
+      ? clamp(time - this.wheelScrollLastTime, 1, 32)
+      : 16.67;
+    this.wheelScrollLastTime = time;
+    const portion = 1 - Math.exp(-elapsed / WHEEL_SCROLL_TAU_MS);
+    const step = this.wheelScrollPending * portion;
+    this.wheelScrollPending -= step;
+    const before = this.scroll.scrollLeft;
+    this.scroll.scrollLeft += step;
+    // Drop remaining momentum at the end of the strip instead of spinning RAFs.
+    if (this.scroll.scrollLeft === before) {
+      this.wheelScrollPending = 0;
+      this.wheelScrollLastTime = 0;
+      return;
+    }
+    this.wheelScrollFrame = requestAnimationFrame((nextTime) => this.stepWheelScroll(nextTime));
+  }
+
   // Absolute scroll to a target page index (used by wheel stepping and by
   // click/keyboard page turns). Also remembers the wheel target index.
   scrollToIndex(index, smooth) {
@@ -696,29 +871,45 @@ export class ComicReader {
     this.windowFrame = requestAnimationFrame(() => {
       this.windowFrame = 0;
       if (!this.isOpen()) return;
+      this.updateCurrentFromScroll({ scheduleWindow: false });
       this.syncScrollMirror();
       this.mountWindow();
+      this.pumpDecode();
       this.updatePeekMask();
     });
   }
 
   onScroll() {
+    this.isScrolling = true;
+    clearTimeout(this.scrollIdleTimer);
+    this.scrollIdleTimer = setTimeout(() => this.finishScrollActivity(), 140);
     this.scheduleWindow();
-    this.updateCurrentFromScroll();
+  }
+
+  finishScrollActivity() {
+    clearTimeout(this.scrollIdleTimer);
+    this.scrollIdleTimer = 0;
+    if (!this.isScrolling) return;
+    this.isScrolling = false;
+    this.pumpDecode();
+    this.maybeUnlockWheel();
   }
 
   mountPage(slot) {
     const element = slot.element;
     const pageEntry = slot.entry;
-    // Only the current page fades in on load. A page that merely scrolls into
-    // view (leading edge) must appear without a fade.
-    const fadeIn = pageEntry === this.entry;
+    const token = this.stripToken;
+    // Every mounted page is hidden until it has decoded, then fades in, so no
+    // progressive/partial decode is ever visible. Slider-seek targets skip the
+    // fade (but still wait for decode).
+    const fadeIn = this.shouldFadePageOnLoad(pageEntry);
     element.className = fadeIn ? 'reader-page is-loading' : 'reader-page';
     element.dataset.readerPage = '';
     element.dataset.page = String(pageEntry.page);
-    element.classList.toggle('is-current', fadeIn);
+    element.classList.toggle('is-current', pageEntry === this.entry);
     element.style.opacity = '';
     element.style.visibility = '';
+    element.style.transition = this.readingMode === 'focus' && !this.pageAnimation ? 'none' : '';
     const base = document.createElement('img');
     base.className = 'reader-page-image';
     base.dataset.readerPageImage = '';
@@ -726,6 +917,7 @@ export class ComicReader {
     base.draggable = false;
     base.decoding = 'async';
     base.loading = 'eager';
+    base.fetchPriority = pageEntry === this.entry ? 'high' : slot.prefetch ? 'low' : 'auto';
     base.src = getImageUrl(this.episodeId, pageEntry.index, pageEntry.file.assetKey);
     element.replaceChildren(base);
     slot.type = 'page';
@@ -737,20 +929,37 @@ export class ComicReader {
     // paint, which would otherwise skip the transition).
     const reveal = () => { if (fadeIn) requestAnimationFrame(() => element.classList.remove('is-loading')); };
     const handleLoaded = () => {
+      if (token !== this.stripToken) return;
       const width = base.naturalWidth || 0;
       const height = base.naturalHeight || 0;
       if (width && height) {
         this.aspectCache.set(key, width / height);
         if (!this.naturalCache.has(key)) this.naturalCache.set(key, { width, height });
       }
-      (base.decode ? base.decode() : Promise.resolve()).catch(() => {}).then(reveal);
+      // Current page first, then visible, then prefetch.
+      this.queueDecode(base, fadeIn ? 0 : (slot.prefetch ? 2 : 1), reveal, slot);
+      this.settleLoad(token);
     };
+    const handleError = () => {
+      if (token !== this.stripToken) return;
+      element.classList.remove('is-loading');
+      this.settleLoad(token);
+    };
+    this.pendingLoads += 1;
     if (base.complete && base.naturalWidth) {
       handleLoaded();
     } else {
       base.addEventListener('load', handleLoaded, { once: true });
-      base.addEventListener('error', () => element.classList.remove('is-loading'), { once: true });
+      base.addEventListener('error', handleError, { once: true });
     }
+  }
+
+  // Track in-flight image loads so wheel input is only accepted once the next
+  // page has both loaded and decoded.
+  settleLoad(token = this.stripToken) {
+    if (token !== this.stripToken) return;
+    this.pendingLoads -= 1;
+    this.maybeUnlockWheel();
   }
 
   mountSpan(slot) {
@@ -769,6 +978,7 @@ export class ComicReader {
 
   mountPeek(slot, peekEntryOverride) {
     const peekElement = slot.peekElement;
+    const token = this.stripToken;
     const peekEntry = peekEntryOverride !== undefined
       ? peekEntryOverride
       : this.resolvePeekTarget(slot.entry).entry;
@@ -781,24 +991,36 @@ export class ComicReader {
       // so comparing it here would clobber that class on every window refresh.
       if (slot.peekKey === key && peekElement.firstElementChild) return;
       slot.peekKey = key;
-      const fadeIn = slot.entry === this.entry;
+      const fadeIn = this.shouldFadePageOnLoad(slot.entry);
       peekElement.className = fadeIn ? 'reader-peek-page is-loading' : 'reader-peek-page';
+      peekElement.style.transition = this.readingMode === 'focus' && !this.pageAnimation ? 'none' : '';
       const image = document.createElement('img');
       image.className = 'reader-peek-image';
       image.alt = '';
       image.draggable = false;
       image.decoding = 'async';
       image.loading = 'eager';
+      image.fetchPriority = slot.entry === this.entry ? 'high' : slot.prefetch ? 'low' : 'auto';
       image.src = getImageUrl(this.episodeId, peekEntry.index, peekEntry.file.assetKey);
       // Reveal on the next frame so the `is-loading` (opacity 0) state is
       // committed first and the fade transition always plays. Only the current
       // page fades; pages scrolling into view appear immediately.
       const reveal = () => { if (fadeIn) requestAnimationFrame(() => peekElement.classList.remove('is-loading')); };
-      const handleLoaded = () => (image.decode ? image.decode() : Promise.resolve()).catch(() => {}).then(reveal);
+      const handleLoaded = () => {
+        if (token !== this.stripToken) return;
+        this.queueDecode(image, fadeIn ? 0 : (slot.prefetch ? 2 : 1), reveal, slot);
+        this.settleLoad(token);
+      };
+      const handleError = () => {
+        if (token !== this.stripToken) return;
+        peekElement.classList.remove('is-loading');
+        this.settleLoad(token);
+      };
+      this.pendingLoads += 1;
       if (image.complete && image.naturalWidth) handleLoaded();
       else {
         image.addEventListener('load', handleLoaded, { once: true });
-        image.addEventListener('error', () => peekElement.classList.remove('is-loading'), { once: true });
+        image.addEventListener('error', handleError, { once: true });
       }
       peekElement.replaceChildren(image);
     } else {
@@ -925,6 +1147,8 @@ export class ComicReader {
     }
     this.entry = entry;
     this.refreshWindow();
+    // The slider-seek target is mounted; clear its no-fade marker.
+    this.noFadeEntry = null;
     const previousSlot = this.pageFor(previous);
     if (previousSlot) {
       previousSlot.element.classList.remove('is-current');
@@ -947,7 +1171,11 @@ export class ComicReader {
     // While a turn animates, the scroll position passes through the previous
     // page; ignore scroll-derived current updates so the header/progress/Peek do
     // not flip back and forth (which reads as a flash).
-    if (shouldAnimate) this.suppressCurrentUntil = performance.now() + 800;
+    if (shouldAnimate) {
+      this.suppressCurrentUntil = performance.now() + 800;
+      // Defer mounting/loading until the turn (scroll + fade) ends.
+      this.scrollStepActive = true;
+    }
     if (shouldAnimate && this.readingMode === 'single') {
       this.animatePageTurn(previous, entry, shouldSlide);
       return;
@@ -960,14 +1188,26 @@ export class ComicReader {
   preloadTarget(entry) {
     const slot = this.pageFor(entry);
     if (!slot) return Promise.resolve();
+    slot.prefetch = false;
     if (slot.type !== 'page') this.mountPage(slot);
     const image = slot.element.querySelector('[data-reader-page-image]');
+    if (image) image.fetchPriority = 'high';
     return this.waitForDecode(image);
   }
 
   waitForDecode(image) {
     if (!image) return Promise.resolve();
-    const decode = () => (image.decode ? image.decode() : Promise.resolve()).catch(() => {});
+    const decode = () => {
+      const queued = this.decodeQueue.find((job) => job.image === image);
+      if (queued) {
+        queued.priority = 0;
+        queued.priorityBoost = true;
+        this.decodeQueue.sort((a, b) => a.priority - b.priority);
+        this.pumpDecode();
+        return queued.promise;
+      }
+      return this.decodeImage(image);
+    };
     if (image.complete && image.naturalWidth) return decode();
     return new Promise((resolve) => {
       image.addEventListener('load', () => decode().then(resolve), { once: true });
@@ -1021,6 +1261,7 @@ export class ComicReader {
       if (this.layout) this.setSlotPosition(record, record.index);
     }
     this.root.classList.add('is-turning');
+    this.turning = true;
     for (const record of [oldRecord, newRecord]) {
       for (const element of [record.element, record.peekElement]) {
         element.style.transition = 'none';
@@ -1052,6 +1293,7 @@ export class ComicReader {
     window.setTimeout(() => {
       if (token !== this.stripToken) return;
       this.root.classList.remove('is-turning');
+      this.turning = false;
       for (const record of [oldRecord, newRecord]) {
         for (const element of [record.element, record.peekElement]) {
           element.style.willChange = '';
@@ -1063,6 +1305,8 @@ export class ComicReader {
       // so they are released again.
       this.mountedRange = null;
       this.refreshWindow();
+      this.pumpDecode();
+      this.maybeUnlockWheel();
     }, duration + 60);
   }
 
@@ -1073,22 +1317,26 @@ export class ComicReader {
     this.scrollToIndex(record.index, animate);
   }
 
-  // Continuous-mode free scroll: smooth-scroll by the wheel delta.
-  scrollBy(dx, dy) {
-    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
-    const behavior = this.prefersReducedMotion() ? 'auto' : 'smooth';
-    this.scroll.scrollBy({ left: dx, top: dy, behavior });
-  }
-
   // Track the current page from the scroll position in every mode, so header,
   // Peek and single/focus visibility all follow native scrolling.
-  updateCurrentFromScroll() {
+  updateCurrentFromScroll({ scheduleWindow = true } = {}) {
     if (!this.pages.length || !this.layout) return;
     if (performance.now() < this.suppressCurrentUntil) return;
     const index = this.indexAtViewportCenter();
     if (index < 0) return;
     const entry = this.pages[index].entry;
-    if (entry !== this.entry) this.setCurrentEntry(entry, { recenter: false });
+    if (entry === this.entry) return;
+    const previousSlot = this.pageFor(this.entry);
+    this.entry = entry;
+    previousSlot?.element.classList.remove('is-current');
+    previousSlot?.peekElement.classList.remove('is-current');
+    const nextSlot = this.pages[index];
+    nextSlot.element.classList.add('is-current');
+    nextSlot.peekElement.classList.add('is-current');
+    // Coalesce the virtual window refresh with scrolling (or zoom); avoid doing
+    // the same mount/layout work synchronously at every page edge.
+    if (scheduleWindow) this.scheduleWindow();
+    this.updateHeaderForEntry();
   }
 
   // Content-axis position of the viewport center, then the nearest page center.
@@ -1135,15 +1383,95 @@ export class ComicReader {
       ?? findNearestPageEntry(this.model, variant, this.entry.page);
     if (!entry) return;
     await this.preloadEntryImage(entry);
-    this.renderStrip(entry);
+    this.crossfadeVariant(variant, entry);
+  }
+
+  // Switch the base variant without rebuilding the strip: the old image stays in
+  // place until the new one has decoded and faded in.
+  crossfadeVariant(variant, currentTarget) {
+    const model = this.model;
+    const targetFor = (slot) => findPageEntry(model, variant, slot.entry.page)
+      ?? findNearestPageEntry(model, variant, slot.entry.page);
+    const switched = this.pages.filter((slot) => slot.type !== 'page');
+    for (const slot of switched) {
+      const next = targetFor(slot);
+      if (!next) continue;
+      slot.entry = next;
+      if (slot.element.dataset) slot.element.dataset.page = String(next.page);
+    }
+    const animated = this.pages.filter((slot) => slot.type === 'page');
+    let pending = animated.length;
+    const finish = () => {
+      if (this.entry === currentTarget) return;
+      this.entry = currentTarget;
+      this.peekVariant = this.resolvePeekTarget(this.entry).variant ?? null;
+      this.peekRange = null;
+      this.refreshWindow();
+      this.updateHeaderForEntry();
+    };
+    if (!pending) { finish(); return; }
+    for (const slot of animated) {
+      const next = targetFor(slot);
+      if (!next) { pending -= 1; continue; }
+      const oldImage = slot.element.querySelector('[data-reader-page-image]');
+      const image = document.createElement('img');
+      image.className = 'reader-page-image reader-page-fade';
+      image.dataset.readerPageImage = '';
+      image.alt = '';
+      image.draggable = false;
+      image.decoding = 'async';
+      image.loading = 'eager';
+      image.fetchPriority = 'high';
+      image.src = getImageUrl(this.episodeId, next.index, next.file.assetKey);
+      image.style.opacity = '0';
+      image.style.transition = `opacity ${TIMING_MS}ms ease`;
+      slot.element.append(image);
+      let settled = false;
+      const cleanup = () => {
+        if (settled) return;
+        settled = true;
+        image.removeEventListener('transitionend', onTransitionEnd);
+        oldImage?.remove();
+        image.classList.remove('reader-page-fade');
+        image.style.opacity = '';
+        image.style.transition = '';
+        slot.entry = next;
+        if (slot.element.dataset) slot.element.dataset.page = String(next.page);
+        pending -= 1;
+        if (!pending) finish();
+      };
+      const onTransitionEnd = (transitionEvent) => {
+        if (transitionEvent.target === image && transitionEvent.propertyName === 'opacity') cleanup();
+      };
+      const settle = () => {
+        requestAnimationFrame(() => { image.style.opacity = '1'; });
+        // Clean up when the new image's opacity transition actually finishes
+        // (fallback in case no transition end fires, e.g. reduced motion).
+        image.addEventListener('transitionend', onTransitionEnd);
+        window.setTimeout(cleanup, TIMING_MS + 200);
+      };
+      const decode = () => this.decodeImage(image).then(settle);
+      if (image.complete && image.naturalWidth) decode();
+      else {
+        image.addEventListener('load', decode, { once: true });
+        image.addEventListener('error', settle, { once: true });
+      }
+    }
   }
 
   // Slider seek: jump immediately with no animation and no decode wait, so the
   // user can drag to locate a page quickly.
+  // Slider seek: no animation, and wait for the target to decode before
+  // switching (so there is no blank frame); the target is mounted while it is
+  // not yet current, so it does not fade in.
   openPage(index) {
     const pages = this.currentPages();
     const entry = pages[clamp(Math.round(Number(index) || 0), 0, Math.max(0, pages.length - 1))];
-    if (entry && entry !== this.entry) this.goToEntry(entry, { animate: false, preload: false });
+    if (entry && entry !== this.entry) {
+      // Slider seek: wait for decode, switch immediately, no fade.
+      this.noFadeEntry = entry;
+      this.goToEntry(entry, { animate: false, preload: true });
+    }
   }
 
   async openCollectionEpisode(index) {
@@ -1585,23 +1913,18 @@ export class ComicReader {
         this.zoomAt(Math.exp(-event.deltaY * 0.0015), event.clientX, event.clientY);
         return;
       }
-      if (this.wheelLocked) { event.preventDefault(); return; }
-      // Continuous mode free-scrolls along the reading axis using the native
-      // scroller. Distance follows the platform default (raw wheel delta);
-      // line/page delta modes are converted to pixels.
+      const horizontal = isHorizontalReadingOrder(this.readingOrder);
+      // Keep native vertical scrolling and precision-touchpad horizontal input.
+      // A vertical wheel has no horizontal native axis, so map its accumulated
+      // delta to a short ease; the browser exposes no API to synthesize native
+      // horizontal-wheel momentum from vertical input.
+      if (!horizontal) return;
+      if (event.deltaMode === 0 && Math.abs(event.deltaX) > Math.abs(event.deltaY) && event.deltaX !== 0) return;
       event.preventDefault();
-      const axisSize = isHorizontalReadingOrder(this.readingOrder) ? this.scroll.clientWidth : this.scroll.clientHeight;
-      let delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
-      if (event.deltaMode === 1) delta *= 16;
-      else if (event.deltaMode === 2) delta *= axisSize;
+      const delta = this.wheelDeltaPixels(event, this.scroll.clientWidth);
       if (!delta) return;
-      if (isHorizontalReadingOrder(this.readingOrder)) {
-        const direction = this.readingOrder === 'rtl' ? -1 : 1;
-        this.scrollBy(direction * delta, 0);
-      } else {
-        this.scrollBy(0, delta);
-      }
-      this.lockWheel();
+      const direction = this.readingOrder === 'rtl' ? -1 : 1;
+      this.queueWheelScroll(direction * delta);
       return;
     }
     event.preventDefault();
@@ -1611,13 +1934,11 @@ export class ComicReader {
       return;
     }
     const axisSize = isHorizontalReadingOrder(this.readingOrder) ? this.scroll.clientWidth : this.scroll.clientHeight;
-    let delta = intent.delta;
-    if (event.deltaMode === 1) delta *= 16;
-    else if (event.deltaMode === 2) delta *= axisSize;
+    const delta = this.wheelDeltaPixels(event, axisSize);
     clearTimeout(this.wheelResetTimer);
     this.wheelAccumulator += delta;
-    // One page per notch; ignore further notches until the turn finishes so the
-    // speed stays steady (TIMING_MS) and the page-turn animation can play out.
+    // One page per notch; ignore further notches until the turn finishes and the
+    // next page has loaded, so scroll / load / input never overlap.
     if (!this.wheelLocked && Math.abs(this.wheelAccumulator) >= 60) {
       const direction = Math.sign(this.wheelAccumulator);
       this.wheelAccumulator = 0;
@@ -1627,18 +1948,41 @@ export class ComicReader {
     this.wheelResetTimer = setTimeout(() => { this.wheelAccumulator = 0; }, 160);
   }
 
-  // Lock wheel input until the current scroll animation ends (scrollend). A
+  // Convert a wheel event to a pixel delta along the dominant axis, applying the
+  // same deltaMode conversion to `deltaX` and `deltaY`.
+  wheelDeltaPixels(event, axisSize) {
+    let delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+    if (event.deltaMode === 1) delta *= PX_PER_LINE;
+    else if (event.deltaMode === 2) delta *= axisSize;
+    return delta;
+  }
+
+  // Wheel input is ignored until the current scroll animation ends AND the next
+  // page(s) have finished decoding, so scroll / load / input never overlap. A
   // fallback timer guards engines/paths where scrollend never fires.
   lockWheel() {
     this.wheelLocked = true;
     clearTimeout(this.wheelLockTimer);
-    this.wheelLockTimer = setTimeout(() => { this.wheelLocked = false; }, TIMING_MS * 4);
+    this.wheelLockTimer = setTimeout(() => { this.wheelLocked = false; }, 3000);
   }
 
   onScrollEnd() {
-    this.wheelLocked = false;
     clearTimeout(this.wheelLockTimer);
     this.wheelLockTimer = 0;
+    clearTimeout(this.scrollIdleTimer);
+    this.scrollIdleTimer = 0;
+    this.isScrolling = false;
+    // Scroll finished: now mount/load the pages the new position needs, then
+    // release input once decoding drains.
+    this.scrollStepActive = false;
+    this.mountWindow();
+    this.pumpDecode();
+    this.maybeUnlockWheel();
+  }
+
+  maybeUnlockWheel() {
+    if (!this.wheelLocked || this.scrollStepActive || this.turning) return;
+    if (this.decodeActive === 0 && this.decodeQueue.length === 0 && this.pendingLoads === 0) this.wheelLocked = false;
   }
 
   // Align to the nearest page after a free drag (replaces CSS scroll-snap, which
@@ -1654,19 +1998,17 @@ export class ComicReader {
     this.markInputModality(event.pointerType);
     if (event.pointerType === 'touch') {
       this.touchMode = true;
-      this.viewport.setPointerCapture(event.pointerId);
       this.touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (this.isContinuous()) {
-        // Continuous: single-finger drag scrolls the strip, two fingers reveal Peek.
-        if (this.touchPoints.size === 1) {
-          this.drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, originX: this.scroll.scrollLeft, originY: this.scroll.scrollTop };
-        } else {
+        // Continuous mode uses native touch scrolling (touch-action on the
+        // scroller); a second finger reveals Peek.
+        if (this.touchPoints.size >= 2) {
           this.touchPeek = true;
-          this.drag = null;
           this.updateTouchPeek();
         }
         return;
       }
+      this.viewport.setPointerCapture(event.pointerId);
       if (this.touchPoints.size === 1) {
         this.touchGesture = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, swiping: false };
         this.animatePeekRadius(0, this.peekDuration(160));
@@ -1706,12 +2048,8 @@ export class ComicReader {
       if (this.touchPoints.has(event.pointerId)) {
         this.touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
         if (this.isContinuous()) {
-          if (this.drag?.pointerId === event.pointerId) {
-            this.scroll.scrollLeft = this.drag.originX + this.drag.x - event.clientX;
-            this.scroll.scrollTop = this.drag.originY + this.drag.y - event.clientY;
-          } else if (this.touchPeek) {
-            this.updateTouchPeek();
-          }
+          // Native scrolling handles the pan; only Peek follows the fingers.
+          if (this.touchPeek) this.updateTouchPeek();
         } else {
           this.updateTouchPeek();
         }
@@ -1749,10 +2087,7 @@ export class ComicReader {
         return;
       }
       if (this.readingMode === 'continuous') {
-        if (this.drag?.pointerId === event.pointerId) {
-          this.drag = null;
-          this.root.classList.remove('is-dragging');
-        }
+        // Native scrolling; nothing to release.
         return;
       }
       const gesture = this.touchGesture;
@@ -1964,7 +2299,10 @@ export class ComicReader {
       if (normalized === this.entry.variant || !this.model.variants.has(normalized)) return false;
       this.peekTargetOverrides.set(key, normalized);
     }
-    this.renderStrip(this.entry);
+    // Only the Peek layer changes; the base layer must not reload.
+    this.peekVariant = this.resolvePeekTarget(this.entry).variant ?? null;
+    this.setPeekVariant(this.peekVariant);
+    this.updateHeaderForEntry();
     return true;
   }
 

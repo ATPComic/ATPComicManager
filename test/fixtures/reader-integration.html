@@ -46,6 +46,16 @@
 import { ComicReader } from '/public/reader.js';
 import { setReaderAssetUrlResolver } from '/public/reader-model.js';
 
+// The reader styles live in App.vue's <style> block. Extract and inject them so
+// this fixture keeps matching the app after the styles were moved.
+await fetch('/ui/src/app/App.vue').then((response) => response.text()).then((text) => {
+  const match = text.match(/<style>([\s\S]*?)<\/style>/);
+  if (!match) return;
+  const style = document.createElement('style');
+  style.textContent = match[1];
+  document.head.append(style);
+}).catch(() => {});
+
 const logEl = document.getElementById('log');
 const log = (line) => { logEl.textContent += `${line}\n`; logEl.scrollTop = logEl.scrollHeight; };
 window.addEventListener('error', (e) => log(`ERROR: ${e.message}`));

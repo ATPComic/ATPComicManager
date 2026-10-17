@@ -268,3 +268,191 @@ test('page slots are placed at content coordinates and mirror for RTL', () => {
   assert.deepEqual(ComicReader.prototype.slotPosition.call(rtl, 0), { left: rtl.layout.total - 100, top: 30 });
   assert.deepEqual(ComicReader.prototype.slotPosition.call(rtl, 2), { left: 0, top: 30 });
 });
+
+function makeWheelSubject(readingOrder = 'ltr') {
+  return {
+    readingMode: 'continuous',
+    readingOrder,
+    scroll: { clientWidth: 800, clientHeight: 600, scrollLeft: 100, scrollTop: 40 },
+    isContinuous() { return this.readingMode === 'continuous'; },
+    wheelDeltaPixels(event, axisSize) { return ComicReader.prototype.wheelDeltaPixels.call(this, event, axisSize); },
+    stepWheelScroll(time) { return ComicReader.prototype.stepWheelScroll.call(this, time); },
+    queueWheelScroll(delta) { this.queuedWheelDelta = delta; },
+    zoomAt(...args) { this.zoomArgs = args; }
+  };
+}
+
+function makeWheelEvent({ deltaX = 0, deltaY = 0, deltaMode = 0, ctrlKey = false, metaKey = false } = {}) {
+  return {
+    deltaX,
+    deltaY,
+    deltaMode,
+    ctrlKey,
+    metaKey,
+    clientX: 30,
+    clientY: 40,
+    prevented: false,
+    preventDefault() { this.prevented = true; }
+  };
+}
+
+test('continuous horizontal mode maps an unmodified mouse wheel to horizontal scrolling', () => {
+  const subject = makeWheelSubject();
+  const event = makeWheelEvent({ deltaY: 3, deltaMode: 1 });
+
+  ComicReader.prototype.onWheel.call(subject, event);
+
+  assert.equal(event.prevented, true);
+  assert.equal(subject.queuedWheelDelta, 100);
+});
+
+test('continuous RTL horizontal mode maps vertical wheel input toward the next page', () => {
+  const subject = makeWheelSubject('rtl');
+  const event = makeWheelEvent({ deltaY: 3, deltaMode: 1 });
+
+  ComicReader.prototype.onWheel.call(subject, event);
+
+  assert.equal(event.prevented, true);
+  assert.equal(subject.queuedWheelDelta, -100);
+});
+
+test('continuous horizontal mode leaves native precision horizontal scrolling untouched', () => {
+  const subject = makeWheelSubject();
+  const event = makeWheelEvent({ deltaX: 24, deltaY: 3 });
+
+  ComicReader.prototype.onWheel.call(subject, event);
+
+  assert.equal(event.prevented, false);
+  assert.equal(subject.scroll.scrollLeft, 100);
+});
+
+test('continuous vertical mode leaves wheel scrolling to the browser', () => {
+  const subject = makeWheelSubject('ttb');
+  const event = makeWheelEvent({ deltaY: 24 });
+
+  ComicReader.prototype.onWheel.call(subject, event);
+
+  assert.equal(event.prevented, false);
+  assert.equal(subject.scroll.scrollTop, 40);
+});
+
+test('continuous wheel zoom still intercepts Ctrl or Meta input', () => {
+  const subject = makeWheelSubject();
+  const event = makeWheelEvent({ deltaY: -20, ctrlKey: true });
+
+  ComicReader.prototype.onWheel.call(subject, event);
+
+  assert.equal(event.prevented, true);
+  assert.deepEqual(subject.zoomArgs, [Math.exp(0.03), 30, 40]);
+});
+
+test('mapped horizontal wheel input eases to its target over animation frames', () => {
+  const subject = makeWheelSubject();
+  const frames = [];
+  subject.wheelScrollPending = 0;
+  subject.wheelScrollFrame = 0;
+  subject.wheelScrollLastTime = 0;
+  subject.prefersReducedMotion = () => false;
+  const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = (callback) => {
+    frames.push(callback);
+    return frames.length;
+  };
+
+  try {
+    ComicReader.prototype.queueWheelScroll.call(subject, 100);
+    let timestamp = 16.67;
+    while (frames.length) {
+      frames.shift()(timestamp);
+      timestamp += 16.67;
+    }
+  } finally {
+    if (previousRequestAnimationFrame) globalThis.requestAnimationFrame = previousRequestAnimationFrame;
+    else delete globalThis.requestAnimationFrame;
+  }
+
+  assert.ok(subject.scroll.scrollLeft > 100);
+  assert.ok(subject.scroll.scrollLeft < 200);
+  assert.equal(subject.wheelScrollPending, 0);
+});
+
+test('scrolling pauses background prefetch decode but still starts a visible-page decode', () => {
+  const currentEntry = {};
+  let started = 0;
+  const subject = {
+    isScrolling: true,
+    entry: currentEntry,
+    decodeLimit: 1,
+    decodeActive: 0,
+    decodePromises: new WeakMap(),
+    decodeImage(image) { return ComicReader.prototype.decodeImage.call(this, image); },
+    decodeQueue: [{ priority: 2, image: { decode: () => { started += 1; return new Promise(() => {}); } }, slot: null }],
+    maybeUnlockWheel() {}
+  };
+
+  ComicReader.prototype.pumpDecode.call(subject);
+  assert.equal(started, 0);
+  assert.equal(subject.decodeQueue.length, 1);
+
+  subject.decodeQueue.push({
+    priority: 2,
+    image: { decode: () => { started += 1; return new Promise(() => {}); } },
+    slot: { type: 'page', entry: currentEntry, prefetch: false }
+  });
+  ComicReader.prototype.pumpDecode.call(subject);
+
+  assert.equal(started, 1);
+  assert.equal(subject.decodeActive, 1);
+  assert.equal(subject.decodeQueue.length, 1);
+});
+
+test('Focus mode animation setting controls page reveal fades without affecting other modes', () => {
+  const subject = {
+    noFadeEntry: null,
+    readingMode: 'focus',
+    pageAnimation: false
+  };
+  const entry = {};
+
+  assert.equal(ComicReader.prototype.shouldFadePageOnLoad.call(subject, entry), false);
+
+  subject.pageAnimation = true;
+  assert.equal(ComicReader.prototype.shouldFadePageOnLoad.call(subject, entry), true);
+
+  subject.readingMode = 'single';
+  subject.pageAnimation = false;
+  assert.equal(ComicReader.prototype.shouldFadePageOnLoad.call(subject, entry), true);
+
+  subject.noFadeEntry = entry;
+  assert.equal(ComicReader.prototype.shouldFadePageOnLoad.call(subject, entry), false);
+});
+
+test('Focus mode without animations disables opacity transitions on mounted pages', () => {
+  const makePage = () => ({
+    style: {},
+    classList: new FakeClassList('is-loading')
+  });
+  const slot = { element: makePage(), peekElement: makePage() };
+  const subject = {
+    root: { classList: new FakeClassList(), dataset: {} },
+    pages: [slot],
+    readingMode: 'focus',
+    readingOrder: 'ltr',
+    pageFit: 'screen',
+    pageAnimation: false,
+    focusDim: true,
+    scroll: { classList: new FakeClassList() },
+    isContinuous() { return false; }
+  };
+
+  ComicReader.prototype.syncModeClasses.call(subject);
+
+  for (const page of [slot.element, slot.peekElement]) {
+    assert.equal(page.style.transition, 'none');
+    assert.equal(page.classList.contains('is-loading'), false);
+  }
+
+  subject.pageAnimation = true;
+  ComicReader.prototype.syncModeClasses.call(subject);
+  assert.equal(slot.element.style.transition, '');
+});

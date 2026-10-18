@@ -114,9 +114,13 @@ function printSummary(result, dryRun) {
   console.log(`  git push -u origin chore/release-v${to}`);
   const slug = repository(projectRoot);
   const repoFlag = slug ? ` --repo ${slug}` : '';
-  console.log(`  gh pr create${repoFlag} --base main --head chore/release-v${to} --title "chore(release): prepare v${to}" --body "..."`);
+  // The bump lands on develop first; main is then fast-forwarded (rebase-merged)
+  // from develop so both lines carry the released version.
+  console.log(`  gh pr create${repoFlag} --base develop --head chore/release-v${to} --title "chore(release): prepare v${to}" --body "..."`);
   console.log('');
-  console.log('After the PR is merged:');
+  console.log('After the PR is merged into develop:');
+  console.log('  git switch develop && git pull --ff-only');
+  console.log('  # Rebase-merge develop into main (e.g. open a develop -> main PR), then:');
   console.log('  git switch main && git pull --ff-only');
   console.log(`  git tag -a v${to} -m "ATP Comic v${to}"`);
   console.log(`  git push origin v${to}`);

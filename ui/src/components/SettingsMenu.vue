@@ -114,6 +114,6 @@ async function confirmReset() {
 
 @media (max-width: 760px) {
   .top-actions .settings-menu { margin-left: auto; }
-  .settings-trigger { width: 38px !important; height: 38px !important; }
+  .settings-trigger { width: 40px !important; height: 40px !important; }
 }
 </style>

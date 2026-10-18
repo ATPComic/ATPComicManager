@@ -147,7 +147,7 @@ defineExpose({ setState });
   .reader-variant-left { justify-self: start; }
   .reader-variant-right { justify-self: end; }
   .reader-variant-buttons { max-width: 100%; justify-self: center; }
-  .reader-peek-target-trigger { min-width: 70px !important; height: 38px !important; }
-  .reader-variants .var-segmented-button { min-width: 42px; min-height: 38px; }
+  .reader-peek-target-trigger { min-width: 72px !important; height: 40px !important; }
+  .reader-variants .var-segmented-button { min-width: 44px; min-height: 40px; }
 }
 </style>

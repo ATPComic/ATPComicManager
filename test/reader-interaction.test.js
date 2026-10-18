@@ -172,13 +172,45 @@ test('two touch points determine Peek center and diameter', () => {
   const subject = {
     peekEnabled: true,
     touchPoints: new Map([[1, { x: 40, y: 100 }], [2, { x: 160, y: 100 }]]),
+    touchPeekStartDistance: 0,
+    touchPeekSpread: false,
     toViewportPoint: (x, y) => ({ x, y }),
-    animatePeekRadius: (value) => { radius = value; },
-    peekDuration: (value) => value
+    setPeekRadius: (value) => { radius = value; }
   };
   ComicReader.prototype.updateTouchPeek.call(subject);
   assert.deepEqual(subject.pointer, { x: 100, y: 100 });
   assert.equal(radius, 60);
+});
+
+test('spreading two fingers while peeking commits like the middle button', () => {
+  const calls = [];
+  let radius = 0;
+  const subject = {
+    peekEnabled: true,
+    touchPoints: new Map([[1, { x: 0, y: 0 }], [2, { x: 100, y: 0 }]]),
+    touchPeekStartDistance: 100,
+    touchPeekSpread: false,
+    touchPeek: true,
+    toViewportPoint: (x, y) => ({ x, y }),
+    setPeekRadius: (value) => { radius = value; },
+    cycleVariant: () => calls.push('cycle')
+  };
+
+  ComicReader.prototype.updateTouchPeek.call(subject);
+  assert.deepEqual(calls, []);
+  assert.equal(radius, 50);
+
+  // Beyond 2x (and +96px) the gesture commits once.
+  subject.touchPoints.set(2, { x: 400, y: 0 });
+  ComicReader.prototype.updateTouchPeek.call(subject);
+  assert.deepEqual(calls, ['cycle']);
+  assert.equal(subject.touchPeek, false);
+  assert.equal(subject.touchPeekSpread, true);
+
+  // Further moves of the same gesture must not re-trigger.
+  subject.touchPoints.set(2, { x: 460, y: 0 });
+  ComicReader.prototype.updateTouchPeek.call(subject);
+  assert.deepEqual(calls, ['cycle']);
 });
 
 test('two-finger pinch zooms only when Peek is disabled', () => {
@@ -678,7 +710,7 @@ test('continuous wheel zoom still intercepts Ctrl or Meta input', () => {
   ComicReader.prototype.onWheel.call(subject, event);
 
   assert.equal(event.prevented, true);
-  assert.deepEqual(subject.zoomArgs, [Math.exp(20 * 0.005), 30, 40]);
+  assert.deepEqual(subject.zoomArgs, [Math.exp(20 * 0.008), 30, 40]);
 });
 
 test('mapped horizontal wheel input eases to its target over animation frames', () => {

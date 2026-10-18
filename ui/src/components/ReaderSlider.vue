@@ -164,7 +164,7 @@ defineExpose({ setState });
 }
 
 @media (max-width: 760px) {
-  .reader-progress-row { min-height: 46px; grid-template-columns: 24px minmax(0, 1fr) 54px; gap: 5px; padding: 5px 8px; }
+  .reader-progress-row { min-height: 48px; grid-template-columns: 24px minmax(0, 1fr) 56px; gap: 5px; padding: 5px 8px; }
   .reader.is-fullscreen .reader-progress-row { left: max(8px, env(safe-area-inset-left)); right: max(72px, calc(env(safe-area-inset-right) + 72px)); }
   .reader.is-fullscreen .reader-page-progress { bottom: calc(8px + env(safe-area-inset-bottom)); }
   .reader.is-fullscreen .reader-episode-progress { bottom: calc(62px + env(safe-area-inset-bottom)); }

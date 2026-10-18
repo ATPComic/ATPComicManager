@@ -47,9 +47,6 @@ const ZOOM_TAU_MS = 48;
 const ZOOM_EPSILON = 0.004;
 // Pixels of wheel delta that amount to one page turn in snap modes.
 const PAGE_TURN_WHEEL_THRESHOLD = 40;
-// After the last zoom step, keep mirroring Peek with the JS transform for a
-// moment before handing back to the compositor scroll-timeline.
-const ZOOM_MIRROR_TAIL_MS = 192;
 // Middle-click Peek transition: expand to full screen, then shrink back (ms).
 const PEEK_EXPAND_MS = 500;
 const PEEK_REVEAL_MS = 300;
@@ -148,14 +145,10 @@ export class ComicReader {
     // Cache of the last written mask opacity so pointer moves do not rewrite it.
     this.peekMaskOpacity = '';
     this.peekVisible = false;
+    this.peekMirrorTransform = null;
     this.peekRange = null;
     this.pointerUpdateFrame = 0;
     this.pendingZoneX = null;
-    // Peek offset is driven by a CSS scroll timeline (compositor). `useScrollTimeline`
-    // gates the JS fallback for engines without scroll-driven animations.
-    this.useScrollTimeline = typeof CSS !== 'undefined'
-      && !!CSS.supports?.('animation-timeline: scroll()')
-      && !!CSS.supports?.('timeline-scope: --reader-peek');
     this.cursorTimer = 0;
     this.pointer = { x: 0, y: 0 };
     this.hasPointerPosition = false;
@@ -167,8 +160,6 @@ export class ComicReader {
     this.zoomFrame = 0;
     this.zoomAnchor = null;
     this.zoomScrollLastTime = 0;
-    this.zooming = false;
-    this.zoomMirrorTimer = 0;
     // Zooming deliberately moves the scroll offset; suppress snap-to-page for a
     // moment so scrollend does not yank the anchored zoom back to centre.
     this.suppressSnapUntil = 0;
@@ -325,11 +316,9 @@ export class ComicReader {
     this.zoomFrame = 0;
     this.zoomAnchor = null;
     this.suppressSnapUntil = 0;
-    this.zooming = false;
-    clearTimeout(this.zoomMirrorTimer);
-    this.zoomMirrorTimer = 0;
     this.peekMaskOpacity = '';
     this.peekVisible = false;
+    this.peekMirrorTransform = null;
     cancelAnimationFrame(this.pointerUpdateFrame);
     cancelAnimationFrame(this.windowFrame);
     this.pointerUpdateFrame = 0;
@@ -519,6 +508,7 @@ export class ComicReader {
     this.viewport.append(this.peekPlane);
     this.peekMaskOpacity = '';
     this.peekVisible = false;
+    this.peekMirrorTransform = null;
     cancelAnimationFrame(this.pointerUpdateFrame);
     this.pointerUpdateFrame = 0;
     this.plane.style.transform = '';
@@ -885,60 +875,26 @@ export class ComicReader {
     this.applyScrollOpacity();
   }
 
-  // Keep the Peek scroller at the same offset as the base scroller. Because the
-  // Peek content scrolls natively under a fixed mask, this does not re-raster
-  // the mask (unlike moving a masked element with a transform).
+  // Keep the Peek layer at the same offset as the base scroller. The mirror is a
+  // plain compositor transform written in the same frame as the scroll/zoom, so
+  // it can never drift from the (transform-based) base layer.
   syncScrollMirror() {
     if (!this.peekVisible || !this.peekMover) return;
-    // The compositor scroll-timeline is great during normal scrolling, but while
-    // zooming the base layer moves via a transform; mirror it with the JS
-    // transform in the same frame so Peek does not lag/jitter by a frame.
-    if (!this.useScrollTimeline || this.zooming) {
-      this.peekMover.style.transform = `translate3d(${-this.scroll.scrollLeft}px, ${-this.scroll.scrollTop}px, 0)`;
-    }
+    const transform = `translate3d(${-this.scroll.scrollLeft}px, ${-this.scroll.scrollTop}px, 0)`;
+    if (this.peekMirrorTransform === transform) return;
+    this.peekMirrorTransform = transform;
+    this.peekMover.style.transform = transform;
   }
 
-  // Wire the Peek layer to the base scroller's scroll timelines (compositor) or
-  // fall back to a JS transform. Both axes are mirrored so Peek stays aligned
-  // when the image is zoomed past the viewport and the cross axis also scrolls.
+  // The Peek mover is driven purely by `syncScrollMirror`; nothing to set up
+  // beyond clearing any legacy mirror state.
   setupPeekTimeline() {
-    if (!this.peekMover || !this.scroll) return;
-    const maxX = Math.max(0, this.scroll.scrollWidth - this.scroll.clientWidth);
-    const maxY = Math.max(0, this.scroll.scrollHeight - this.scroll.clientHeight);
-    if (this.useScrollTimeline && !this.zooming) {
-      const timeline = '--reader-peek-x x, --reader-peek-y y';
-      if (this.scroll.style.scrollTimeline !== timeline) this.scroll.style.scrollTimeline = timeline;
-      this.peekMover.style.transform = '';
-      // Percent translate is relative to the mover's own box, so size it to each
-      // axis's scroll range.
-      this.peekMover.style.width = `${maxX}px`;
-      this.peekMover.style.height = `${maxY}px`;
-      this.peekMover.classList.add('is-mirror');
-    } else {
-      // Zoom (or no scroll-timeline support): drive the mirror with a JS
-      // transform so Peek and the base transform update in the same frame.
-      this.peekMover.classList.remove('is-mirror');
-      this.peekMover.style.width = '';
-      this.peekMover.style.height = '';
-      this.syncScrollMirror();
-    }
-  }
-
-  // Enter (and keep alive) the JS-mirror mode used while zooming; after the zoom
-  // burst settles, hand back to the compositor scroll-timeline.
-  markZooming() {
-    if (!this.zooming) {
-      this.zooming = true;
-      this.setupPeekTimeline();
-    }
+    if (!this.peekMover) return;
+    this.peekMover.classList.remove('is-mirror');
+    this.peekMover.style.width = '';
+    this.peekMover.style.height = '';
+    this.peekMirrorTransform = null;
     this.syncScrollMirror();
-    clearTimeout(this.zoomMirrorTimer);
-    this.zoomMirrorTimer = setTimeout(() => {
-      this.zoomMirrorTimer = 0;
-      this.zooming = false;
-      this.setupPeekTimeline();
-      this.syncScrollMirror();
-    }, ZOOM_MIRROR_TAIL_MS);
   }
 
   scrollTo(left, top, smooth) {
@@ -1907,7 +1863,7 @@ export class ComicReader {
       this.scroll.scrollTop = nextAxis;
       this.scroll.scrollLeft = nextCross;
     }
-    this.markZooming();
+    this.syncScrollMirror();
     this.refreshWindow();
     this.updateCurrentFromScroll();
   }
@@ -1972,6 +1928,9 @@ export class ComicReader {
     const available = visibleTransition
       || (this.peekEnabled && !!this.currentPeekEntry() && !hiddenTransition);
     this.peekVisible = available;
+    // The Peek content may have just become visible while the scroll did not
+    // move; make sure the mirror is written before the mask fades in.
+    if (available) this.syncScrollMirror();
     // The mask layer is viewport-sized, so the circle centre, radius and feather
     // are expressed directly in viewport-local pixels as CSS variables. The mask
     // itself is static CSS; only the variables change, which lets `--peek-radius`
@@ -2284,6 +2243,7 @@ export class ComicReader {
     this.applyScrollOpacity();
     // Re-arm the page-edge cues only after the scroll has settled.
     this.updatePageZone();
+    this.syncScrollMirror();
     // Free scrolls settle onto the nearest page, but never mid-gesture: a mouse
     // drag pauses between moves, and a finger may rest while the scroll idles.
     if (!this.drag && this.touchPoints.size === 0) this.snapToNearest();
@@ -2392,6 +2352,8 @@ export class ComicReader {
     if (this.drag?.pointerId === event.pointerId) {
       this.scroll.scrollLeft = this.drag.originX + this.drag.x - event.clientX;
       this.scroll.scrollTop = this.drag.originY + this.drag.y - event.clientY;
+      // Mirror in the same frame as the drag so Peek cannot lag the base layer.
+      this.syncScrollMirror();
     }
     this.schedulePointerUpdate(event.clientX);
   }

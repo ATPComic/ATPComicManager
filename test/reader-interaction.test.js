@@ -278,6 +278,7 @@ function makeMaskSubject() {
     peekOpacity: 100,
     peekPressPointerId: null,
     peekForceOpaque: false,
+    syncScrollMirror() {},
     // A non-trivial camera, to prove the mask ignores it.
     transform: { x: -9999, y: -8888, scale: 4 }
   };
@@ -410,6 +411,7 @@ test('animatePeekRadius drives the radius and duration through CSS variables', a
       peekPressPointerId: null,
       peekForceOpaque: false,
       currentPeekEntry: () => ({ page: 1 }),
+      syncScrollMirror() {},
       updatePeekMask() { ComicReader.prototype.updatePeekMask.call(this); },
       waitForPeekRadius() { return ComicReader.prototype.waitForPeekRadius.call(this); },
       nextPaint() { return Promise.resolve(); }
@@ -554,7 +556,7 @@ test('zoomTo keeps the point under the cursor fixed on both axes', () => {
     viewport: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 500, height: 400 }) },
     crossPadFor: ComicReader.prototype.crossPadFor,
     applyViewTransform() {},
-    markZooming() { this.marked = true; },
+    syncScrollMirror() { this.mirrored = true; },
     refreshWindow() {},
     updateCurrentFromScroll() {}
   };
@@ -563,6 +565,25 @@ test('zoomTo keeps the point under the cursor fixed on both axes', () => {
   assert.equal(subject.zoom, 2);
   assert.equal(scroll.scrollLeft, 50);
   assert.equal(scroll.scrollTop, 210);
+  assert.equal(subject.mirrored, true);
+});
+
+test('the Peek layer mirrors scroll with a same-frame transform', () => {
+  const subject = {
+    peekVisible: true,
+    peekMover: { style: {}, classList: new FakeClassList('is-mirror') },
+    scroll: { scrollLeft: 120, scrollTop: 40 },
+    syncScrollMirror: ComicReader.prototype.syncScrollMirror,
+    setupPeekTimeline: ComicReader.prototype.setupPeekTimeline
+  };
+
+  ComicReader.prototype.syncScrollMirror.call(subject);
+  assert.equal(subject.peekMover.style.transform, 'translate3d(-120px, -40px, 0)');
+
+  ComicReader.prototype.setupPeekTimeline.call(subject);
+  assert.equal(subject.peekMover.classList.contains('is-mirror'), false);
+  assert.equal(subject.peekMover.style.width, '');
+  assert.equal(subject.peekMover.style.height, '');
 });
 
 test('queueZoom accumulates toward one target and clamps to the zoom range', () => {

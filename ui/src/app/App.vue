@@ -891,6 +891,8 @@ onMounted(async () => {
       return true;
     }
   });
+  // Dev aid: lets the browser console inspect the live reader instance.
+  if (import.meta.env.DEV) window.__reader = reader;
   resizeObserver = new ResizeObserver(([entry]) => {
     viewportHeight.value = entry.contentRect.height || 650;
   });
@@ -1571,7 +1573,7 @@ onBeforeUnmount(() => {
 .reader-window-controls button:hover { background: color-mix(in srgb, var(--text) 12%, transparent); }
 .reader-window-controls .reader-window-close:hover { color: #fff; background: #c42b1c; }
 .reader-stage { position: relative; min-width: 0; min-height: 0; display: grid; grid-template: "viewport" minmax(0, 1fr) "page" auto "episode" auto / minmax(0, 1fr); overflow: hidden; }
-.reader-viewport { position: relative; grid-area: viewport; min-width: 0; min-height: 0; overflow: hidden; touch-action: pan-x pan-y; cursor: default; background: var(--reader-bg, #08090a); timeline-scope: --reader-peek-x, --reader-peek-y; }
+.reader-viewport { position: relative; grid-area: viewport; min-width: 0; min-height: 0; overflow: hidden; touch-action: pan-x pan-y; cursor: default; background: var(--reader-bg, #08090a); }
 .reader-scroll { position: absolute; inset: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: none; touch-action: none; }
 .reader-scroll.is-native-pan { touch-action: pan-x pan-y; }
 /* Single/Focus hand one-finger panning to the browser (snap on scrollend) so it
@@ -1607,12 +1609,6 @@ onBeforeUnmount(() => {
   transition: opacity var(--peek-fade-duration, 250ms) cubic-bezier(.2, .7, .2, 1), --peek-radius var(--peek-radius-duration, 0ms) cubic-bezier(.2, .7, .2, 1);
 }
 .reader-peek-mover { position: absolute; left: 0; top: 0; }
-.reader-peek-mover.is-mirror {
-  animation: reader-peek-mirror-x linear both, reader-peek-mirror-y linear both;
-  animation-timeline: --reader-peek-x, --reader-peek-y;
-}
-@keyframes reader-peek-mirror-x { from { translate: 0 0; } to { translate: -100% 0; } }
-@keyframes reader-peek-mirror-y { from { transform: translateY(0); } to { transform: translateY(-100%); } }
 .reader-peek-track { position: absolute; left: 0; top: 0; }
 .reader.is-mode-single .reader-page, .reader.is-mode-single .reader-peek-page { opacity: var(--reader-page-alpha, 1); transition: filter 250ms ease; }
 /* In single mode the tile opacity is scroll-linked, so the decode fade lives on

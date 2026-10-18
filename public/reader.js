@@ -19,7 +19,7 @@ import { t } from './i18n.js';
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 const DEFAULT_ASPECT = 0.7;
-const DRAG_THRESHOLD = 6;
+const DRAG_THRESHOLD = 8;
 // Gap between pages along the reading axis. Must match .reader-plane's old gap.
 const LAYOUT_GAP = 8;
 // Shared timing for page and Peek fade animations.
@@ -33,23 +33,46 @@ const PX_PER_LINE = 100 / 3;
 // Horizontal mouse-wheel input has no browser-native momentum path. Follow its
 // accumulated target with a short exponential ease instead of issuing a new
 // smooth-scroll animation for every wheel event (which continually restarts it).
-const WHEEL_SCROLL_TAU_MS = 52;
+const WHEEL_SCROLL_TAU_MS = 48;
 const WHEEL_SCROLL_EPSILON = 0.5;
 const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 12;
 // Wheel/pinch zoom: discrete mouse notches step by a fixed factor (like browser
 // zoom), while continuous trackpad/pinch deltas accumulate with a per-pixel
 // sensitivity so a full gesture feels responsive.
-const ZOOM_WHEEL_SENSITIVITY = 0.005;
-const ZOOM_NOTCH_MIN_PIXELS = 50;
+const ZOOM_WHEEL_SENSITIVITY = 0.008;
+const ZOOM_NOTCH_MIN_PIXELS = 48;
 const ZOOM_NOTCH_FACTOR = 1.2;
-const ZOOM_TAU_MS = 55;
-const ZOOM_EPSILON = 0.002;
+const ZOOM_TAU_MS = 48;
+const ZOOM_EPSILON = 0.004;
 // Pixels of wheel delta that amount to one page turn in snap modes.
-const PAGE_TURN_WHEEL_THRESHOLD = 42;
+const PAGE_TURN_WHEEL_THRESHOLD = 40;
 // After the last zoom step, keep mirroring Peek with the JS transform for a
 // moment before handing back to the compositor scroll-timeline.
-const ZOOM_MIRROR_TAIL_MS = 180;
+const ZOOM_MIRROR_TAIL_MS = 192;
+// Middle-click Peek transition: expand to full screen, then shrink back (ms).
+const PEEK_EXPAND_MS = 500;
+const PEEK_REVEAL_MS = 300;
+// Peek interaction animation timings (ms), on the same 8ms grid as TIMING_MS.
+const PEEK_PRESS_MS = 168;
+const PEEK_RELEASE_MS = 208;
+const PEEK_TOUCH_HIDE_MS = 160;
+// Spreading two fingers by this ratio/px commits the Peek target (like the
+// middle mouse button). Deliberately large so growing the circle does not
+// commit by accident.
+const PEEK_SPREAD_RATIO = 2;
+const PEEK_SPREAD_MIN_PX = 96;
+// Wheel gesture idle before a snap-mode turn is allowed again (ms).
+const WHEEL_GESTURE_IDLE_MS = 160;
+// Idle time before a scroll is considered finished (ms).
+const SCROLL_IDLE_MS = 144;
+// Fallback in case `scrollend` never fires for a page turn (ms).
+const PAGE_STEP_FALLBACK_MS = 3000;
+// How far the Peek circle grows while the left mouse button is held.
+const PEEK_PRESS_SCALE = 1.75;
+// Cursor auto-hide and fullscreen chrome auto-hide (ms).
+const CURSOR_HIDE_MS = 896;
+const FULLSCREEN_CHROME_MS = 320;
 
 export class ComicReader {
   constructor(root, {
@@ -168,6 +191,8 @@ export class ComicReader {
     this.touchPoints = new Map();
     this.touchPeek = false;
     this.touchPinch = null;
+    this.touchPeekStartDistance = 0;
+    this.touchPeekSpread = false;
     this.touchMode = globalThis.matchMedia?.('(pointer: coarse)').matches ?? false;
     if (this.touchMode) this.peekRadiusCurrent = this.peekRadiusTarget = 0;
     this.resizeFrame = 0;
@@ -339,6 +364,8 @@ export class ComicReader {
     this.touchPoints.clear();
     this.touchPeek = false;
     this.touchPinch = null;
+    this.touchPeekStartDistance = 0;
+    this.touchPeekSpread = false;
     this.setPageZoneWidths(0, 0);
     const shouldExitFullscreen = this.fullscreenRequested
       && document.fullscreenElement === document.documentElement;
@@ -1006,7 +1033,7 @@ export class ComicReader {
     this.isScrolling = true;
     this.root.classList.add('is-scrolling');
     clearTimeout(this.scrollIdleTimer);
-    this.scrollIdleTimer = setTimeout(() => this.finishScrollActivity(), 140);
+    this.scrollIdleTimer = setTimeout(() => this.finishScrollActivity(), SCROLL_IDLE_MS);
     this.scheduleWindow();
   }
 
@@ -1654,7 +1681,7 @@ export class ComicReader {
     this.root.classList.add('is-peek-transitioning');
     this.syncPeekInteractionState();
     this.updatePeekMask();
-    await this.animatePeekRadius(this.getPeekCoverRadius(), this.peekDuration(500));
+    await this.animatePeekRadius(this.getPeekCoverRadius(), this.peekDuration(PEEK_EXPAND_MS));
     if (!this.isOpen() || this.peekTransitionStage !== 'expanding') return this.cancelPeekTransition();
     await this.preloadEntryImage(targetEntry);
     if (sourceEpisodeId !== this.episodeId || !this.isOpen() || this.peekTransitionStage !== 'expanding') {
@@ -1803,7 +1830,7 @@ export class ComicReader {
     this.peekTransitionStage = 'settling';
     this.peekPlane.style.removeProperty('transition');
     this.updatePeekMask();
-    await this.animatePeekRadius(this.peekRadius, this.peekDuration(300));
+    await this.animatePeekRadius(this.peekRadius, this.peekDuration(PEEK_REVEAL_MS));
     if (!this.isOpen() || this.peekTransitionStage !== 'settling') return this.cancelPeekTransition();
     this.finishPeekTransition();
   }
@@ -2005,7 +2032,20 @@ export class ComicReader {
     return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   }
 
-  animatePeekRadius(target, duration = this.peekDuration(140)) {
+  // Direct radius update with no CSS transition, used while fingers track the
+  // Peek circle (a transition would visibly lag the gesture).
+  setPeekRadius(value) {
+    this.peekAnimationResolve?.();
+    this.peekAnimationResolve = null;
+    this.peekRadiusCurrent = value;
+    this.peekRadiusTarget = value;
+    const plane = this.peekPlane;
+    if (!plane) return;
+    plane.style.setProperty('--peek-radius-duration', '0ms');
+    this.updatePeekMask();
+  }
+
+  animatePeekRadius(target, duration = this.peekDuration(PEEK_RELEASE_MS)) {
     // A new target supersedes any in-flight radius wait.
     this.peekAnimationResolve?.();
     this.peekAnimationResolve = null;
@@ -2072,7 +2112,7 @@ export class ComicReader {
 
     if (pointerId == null || this.peekTransitionStage) return false;
     if (animateRadius) {
-      this.animatePeekRadius(this.peekRadius, this.peekDuration(210));
+      this.animatePeekRadius(this.peekRadius, this.peekDuration(PEEK_RELEASE_MS));
     } else {
       this.peekAnimationResolve?.();
       this.peekAnimationResolve = null;
@@ -2175,7 +2215,7 @@ export class ComicReader {
       this.wheelAccumulator = 0;
       this.wheelGestureActive = false;
       this.maybeReleasePageStep();
-    }, 160);
+    }, WHEEL_GESTURE_IDLE_MS);
   }
 
   // Convert a wheel event to a pixel delta along the dominant axis, applying the
@@ -2216,7 +2256,7 @@ export class ComicReader {
     this.pageStepLocked = true;
     clearTimeout(this.pageStepLockTimer);
     // Fallback for engines/paths where scrollend never fires.
-    this.pageStepLockTimer = setTimeout(() => this.releasePageStep(), 3000);
+    this.pageStepLockTimer = setTimeout(() => this.releasePageStep(), PAGE_STEP_FALLBACK_MS);
   }
 
   releasePageStep() {
@@ -2270,28 +2310,29 @@ export class ComicReader {
     if (event.pointerType === 'touch') {
       this.touchMode = true;
       this.touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      if (this.isContinuous()) {
-        // Continuous mode uses native touch scrolling (touch-action on the
-        // scroller); a second finger reveals Peek.
-        if (this.touchPoints.size >= 2 && this.peekEnabled) {
-          this.touchPeek = true;
-          this.updateTouchPeek();
-        }
-        return;
-      }
       if (this.touchPoints.size === 1) {
-        this.touchGesture = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, swiping: false };
+        this.touchGesture = null;
         this.touchPinch = null;
-        if (this.peekEnabled) this.animatePeekRadius(0, this.peekDuration(160));
+        this.touchPeekStartDistance = 0;
+        this.touchPeekSpread = false;
+        // Snap modes also track a tap; continuous mode leaves single-finger
+        // panning entirely to the native scroller.
+        if (!this.isContinuous()) {
+          this.touchGesture = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, swiping: false };
+          if (this.peekEnabled) this.animatePeekRadius(0, this.peekDuration(PEEK_TOUCH_HIDE_MS));
+        }
       } else {
-        // Second finger: Peek when enabled, otherwise pinch-zoom. Native
-        // single-finger panning stays available through `touch-action`.
+        // Second finger: Peek when enabled, otherwise pinch-zoom. Single-finger
+        // panning stays available through `touch-action` in every mode.
         this.touchGesture = null;
         if (this.peekEnabled) {
           this.touchPeek = true;
           this.touchPinch = null;
+          this.touchPeekStartDistance = this.touchPinchState()?.distance ?? 0;
+          this.touchPeekSpread = false;
           this.updateTouchPeek();
         } else {
+          this.touchPeek = false;
           this.touchPinch = this.touchPinchState();
         }
       }
@@ -2317,7 +2358,7 @@ export class ComicReader {
     this.pointerDown = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
     if (this.isPeekInteractive()) {
       this.beginPeekPress(event.pointerId);
-      this.animatePeekRadius(this.peekRadius * 1.75, this.peekDuration(170));
+      this.animatePeekRadius(this.peekRadius * PEEK_PRESS_SCALE, this.peekDuration(PEEK_PRESS_MS));
     }
   }
 
@@ -2325,12 +2366,11 @@ export class ComicReader {
     if (event.pointerType === 'touch') {
       if (this.touchPoints.has(event.pointerId)) {
         this.touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
-        if (this.isContinuous()) {
-          // Native scrolling handles the pan; only Peek follows the fingers.
-          if (this.touchPeek) this.updateTouchPeek();
-        } else if (this.touchPeek) {
+        if (this.touchPeek) {
+          // Two fingers with Peek on: reveal; the native pan is suppressed.
           this.updateTouchPeek();
         } else if (!this.peekEnabled && this.touchPoints.size >= 2) {
+          // Two fingers with Peek off: pinch-zoom, in any reading mode.
           this.updateTouchPinch();
         }
       }
@@ -2363,7 +2403,9 @@ export class ComicReader {
       if (this.touchPeek) {
         if (this.touchPoints.size < 2) {
           this.touchPeek = false;
-          this.animatePeekRadius(0, this.peekDuration(210));
+          this.touchPeekStartDistance = 0;
+          this.touchPeekSpread = false;
+          this.animatePeekRadius(0, this.peekDuration(PEEK_RELEASE_MS));
         }
         this.touchGesture = null;
         return;
@@ -2448,7 +2490,21 @@ export class ComicReader {
     const [a, b] = [...this.touchPoints.values()];
     this.pointer = this.toViewportPoint((a.x + b.x) / 2, (a.y + b.y) / 2);
     this.hasPointerPosition = true;
-    this.animatePeekRadius(Math.hypot(a.x - b.x, a.y - b.y) / 2, this.peekDuration(80));
+    const distance = Math.hypot(a.x - b.x, a.y - b.y);
+    // Spreading the fingers past a threshold commits the Peek target, i.e. the
+    // same action as the middle mouse button. Try once per gesture.
+    if (!this.touchPeekSpread && this.touchPeekStartDistance > 0) {
+      const grown = distance >= this.touchPeekStartDistance * PEEK_SPREAD_RATIO
+        && distance - this.touchPeekStartDistance >= PEEK_SPREAD_MIN_PX;
+      if (grown) {
+        this.touchPeekSpread = true;
+        this.touchPeek = false;
+        this.cycleVariant();
+        return;
+      }
+    }
+    // Track the fingers directly: a CSS transition would lag behind the gesture.
+    this.setPeekRadius(distance / 2);
   }
 
   // Two-finger pinch (only when Peek is disabled): the finger-distance ratio
@@ -2521,7 +2577,7 @@ export class ComicReader {
     clearTimeout(this.cursorTimer);
     this.cursorTimer = setTimeout(() => {
       if (this.isOpen() && !this.drag) this.root.classList.add('is-cursor-hidden');
-    }, 900);
+    }, CURSOR_HIDE_MS);
   }
 
   // ---------------------------------------------------------------- page zones
@@ -2716,7 +2772,7 @@ export class ComicReader {
         this.root.classList.remove('is-chrome-visible');
         this.notePointerActivity();
       }
-    }, 320);
+    }, FULLSCREEN_CHROME_MS);
   }
 
   scheduleFitAfterFullscreenLayout() {

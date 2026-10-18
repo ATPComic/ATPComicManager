@@ -215,7 +215,7 @@ function finishDrop(event) {
 @media (max-width: 760px) {
   .tag-tree-editor.root { margin-top: 8px; }
   .tag-node-row {
-    min-height: 42px;
+    min-height: 44px;
     grid-template-columns: 24px 28px 36px minmax(72px, 1fr) auto auto;
     gap: 2px;
     padding-block: 2px;

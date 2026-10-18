@@ -40,7 +40,7 @@ function update(value) { emit('update:modelValue', value); emit('change'); }
 .tag-filter-popover { overflow: hidden !important; border: 1px solid var(--outline); border-radius: 24px !important; background: var(--surface-highest) !important; }
 .touch-tag-sheet { width: 100%; border-radius: 20px 20px 0 0; background: var(--surface-high); }
 .touch-tag-heading { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; }
-.touch-tag-sheet .tag-filter-panel { width: 100%; max-width: 100%; height: min(65dvh, 560px); min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 58px minmax(0, 1fr); }
+.touch-tag-sheet .tag-filter-panel { width: 100%; max-width: 100%; height: min(65dvh, 560px); min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 56px minmax(0, 1fr); }
 .touch-tag-sheet .tag-filter-categories { display: flex; overflow-x: auto; border-right: 0; }
 .touch-tag-sheet .tag-filter-categories > .var-badge { flex: 0 0 auto; width: auto; }
 .touch-tag-sheet .tag-filter-values { overflow: auto; min-height: 0; }

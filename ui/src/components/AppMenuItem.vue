@@ -15,5 +15,5 @@ defineProps({ icon: String, label: String, description: String, href: String });
 .app-menu-item:hover, .app-menu-item:focus-visible { background: var(--surface-high); }
 .app-menu-item > span { display: grid; gap: 2px; min-width: 0; }
 .app-menu-item small { color: var(--muted); font-size: 12px; line-height: 1.4; }
-.has-description { min-height: 58px; }
+.has-description { min-height: 56px; }
 </style>

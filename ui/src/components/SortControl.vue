@@ -62,7 +62,7 @@ function select(option) {
 .sort-filter-control > .var-menu { width: 100%; min-width: 0; display: flex; }
 .sort-filter-popover { overflow: hidden !important; border: 1px solid var(--outline) !important; border-radius: 16px !important; background: var(--surface-highest) !important; }
 .sort-filter-panel { width: 210px; display: grid; gap: 2px; padding: 6px; }
-.sort-filter-panel .sort-option { min-height: 42px; justify-content: flex-start; border-radius: 12px !important; color: var(--text) !important; }
+.sort-filter-panel .sort-option { min-height: 44px; justify-content: flex-start; border-radius: 12px !important; color: var(--text) !important; }
 .sort-filter-panel .sort-option.selected { color: var(--on-secondary-container) !important; background: var(--secondary-container) !important; }
 .sort-filter-panel .sort-option .var-button__content { width: 100%; display: flex; align-items: center; gap: 10px; }
 .sort-filter-panel .sort-option .var-button__content > span { min-width: 0; flex: 1; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; }

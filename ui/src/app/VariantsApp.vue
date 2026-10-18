@@ -842,7 +842,7 @@ onMounted(async () => {
 .variant-file-copy small { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 
 .variant-page-button {
-  min-width: 38px !important;
+  min-width: 40px !important;
   height: 24px !important;
   flex: 0 0 auto;
   padding-inline: 6px !important;
@@ -882,13 +882,13 @@ onMounted(async () => {
   .variant-episode-pane .pane-heading h2 { font-size: 16px; }
   .variant-episode-list { display: flex; gap: 5px; overflow-x: auto; overflow-y: hidden; padding: 5px 8px 9px; scrollbar-width: none; touch-action: pan-x; }
   .variant-episode-list::-webkit-scrollbar { display: none; }
-  .variant-episode-button { width: 150px; min-width: 150px !important; height: 70px; margin: 0; border-radius: 12px !important; }
+  .variant-episode-button { width: 150px; min-width: 150px !important; height: 72px; margin: 0; border-radius: 12px !important; }
   .variant-board-pane > .var-card__floater > .var-card__container > .var-card__content > .pane-heading { min-height: 72px; flex-wrap: wrap; align-content: center; padding: 5px 8px; }
   .variant-board-pane .pane-heading > div:first-child { width: 100%; }
   .variant-board-actions { width: 100%; gap: 4px; overflow-x: auto; margin: 0; scrollbar-width: none; }
   .variant-board-actions::-webkit-scrollbar { display: none; }
   .variant-board-actions > * { min-width: max-content; }
-  .variant-board-actions .var-button { min-height: 38px; }
+  .variant-board-actions .var-button { min-height: 40px; }
   .variant-board {
     grid-template-columns: none;
     grid-auto-flow: column;
@@ -900,7 +900,7 @@ onMounted(async () => {
     touch-action: pan-x;
   }
   .variant-column { border-radius: 14px; scroll-snap-align: center; }
-  .variant-column > header { height: 58px; flex-basis: 58px; }
+  .variant-column > header { height: 56px; flex-basis: 56px; }
   .variant-column-list { scrollbar-gutter: auto; padding-inline: 6px; touch-action: pan-y; }
   .variant-file-card { height: 76px; grid-template-columns: 60px minmax(0, 1fr); cursor: pointer; }
   .variant-file-card .drag-handle { display: none; }

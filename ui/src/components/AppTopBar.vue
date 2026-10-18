@@ -48,7 +48,7 @@ function exportAction(name) {
 <template>
   <header class="top-app-bar">
     <div class="brand-block">
-      <img class="brand-icon" :src="appIcon" width="26" height="26" alt="" draggable="false">
+      <img class="brand-icon" :src="appIcon" width="28" height="28" alt="" draggable="false">
       <h1>{{ t('appTitle') }}</h1>
     </div>
     <nav class="top-actions">

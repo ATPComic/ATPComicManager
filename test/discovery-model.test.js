@@ -42,6 +42,56 @@ test('discovery reuses OR within categories and AND between categories', () => {
   assert.deepEqual(discoveryCandidates({}, {}), []);
 });
 
+const variantLibrary = { episodes: {
+  standard: { files: [
+    { name: '20250101_a1.png', assignments: [{ variant: 'a', pageNumber: 1 }] },
+    { name: '20250101_a2.png', assignments: [{ variant: 'a', pageNumber: 2 }] },
+    { name: '20250101_b1.png', assignments: [{ variant: 'b', pageNumber: 1 }] },
+    { name: '20250101_c1.png', assignments: [{ variant: 'c', pageNumber: 1 }] }
+  ] },
+  onlyB: { files: [
+    { name: '20250102_b1.png', assignments: [{ variant: 'b', pageNumber: 1 }] },
+    { name: '20250102_b2.png', assignments: [{ variant: 'b', pageNumber: 2 }] }
+  ] },
+  ac: { files: [
+    { name: '20250103_a1.png', assignments: [{ variant: 'a', pageNumber: 1 }] },
+    { name: '20250103_c1.png', assignments: [{ variant: 'c', pageNumber: 1 }] }
+  ] },
+  special: { files: [
+    { name: '20250104_a1.png', assignments: [{ variant: 'a', pageNumber: 1 }] },
+    { name: '20250104_b1_sp1.png', assignments: [{ variant: 'b_sp1', pageNumber: 1 }] }
+  ] },
+  plain: { files: [{ name: 'plain.png', assignments: [] }] }
+} };
+
+function variantIds(variantFilter, mode = 'images') {
+  return discoveryCandidates(variantLibrary, { categories: [], episodeTags: {} }, {}, mode, variantFilter)
+    .map((item) => item.file.name)
+    .sort();
+}
+
+test('discovery variant filter selects letters without inventing missing ones', () => {
+  assert.equal(variantIds('all').length, 11);
+  assert.deepEqual(variantIds('a'), ['20250101_a1.png', '20250101_a2.png', '20250103_a1.png', '20250104_a1.png']);
+  // `b_sp1` is a special variant, not the letter B.
+  assert.deepEqual(variantIds('b'), ['20250101_b1.png', '20250102_b1.png', '20250102_b2.png']);
+  assert.deepEqual(variantIds('c'), ['20250101_c1.png', '20250103_c1.png']);
+});
+
+test('discovery first/last variant are per episode and robust to missing letters', () => {
+  // standard: a..c -> first a, last c; onlyB -> both b; ac -> a/c; special -> a (letters only).
+  assert.deepEqual(variantIds('first'), [
+    '20250101_a1.png', '20250101_a2.png', '20250102_b1.png', '20250102_b2.png', '20250103_a1.png', '20250104_a1.png'
+  ]);
+  assert.deepEqual(variantIds('last'), [
+    '20250101_c1.png', '20250102_b1.png', '20250102_b2.png', '20250103_c1.png', '20250104_a1.png'
+  ]);
+});
+
+test('discovery covers honours the variant filter', () => {
+  assert.deepEqual(variantIds('c', 'covers'), ['20250101_c1.png', '20250103_c1.png']);
+});
+
 test('shuffle preserves every candidate exactly once without mutating the source', () => {
   const original = [1, 2, 3, 4];
   const result = shuffleDiscovery(original, () => 0);

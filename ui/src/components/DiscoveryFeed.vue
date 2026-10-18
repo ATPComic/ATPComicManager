@@ -6,7 +6,7 @@ import { discoveryColumnCount, discoveryColumnGap, masonryColumns, prepareDiscov
 import { countTagEpisodes } from '../../../public/collection-model.js';
 import { getImageUrl, getThumbnailUrl } from '../../../public/reader-model.js';
 import { t } from '../../../public/i18n.js';
-import { mdiChevronLeft, mdiRefresh } from '../lib/icons.js';
+import { mdiChevronDown, mdiChevronLeft, mdiRefresh } from '../lib/icons.js';
 import MdiIcon from './MdiIcon.vue';
 import TagFilterControl from './TagFilterControl.vue';
 
@@ -20,6 +20,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'read']);
 const mode = ref('images');
 const filters = ref({});
+const variantFilter = ref('all');
 const items = ref([]);
 const prepared = ref([]);
 const preparing = ref(false);
@@ -30,8 +31,19 @@ const preview = ref(null);
 const previewOpen = ref(false);
 const containerWidth = ref(0);
 const counts = computed(() => countTagEpisodes(Object.keys(props.library.episodes ?? {}), props.tags.episodeTags, props.tags.categories));
-const candidates = computed(() => discoveryCandidates(props.library, props.tags, filters.value, mode.value));
+const candidates = computed(() => discoveryCandidates(props.library, props.tags, filters.value, mode.value, variantFilter.value));
 const candidateSignature = computed(() => discoverySignature(candidates.value));
+const variantOptions = computed(() => [
+  { label: t('variantFilterAll'), value: 'all', ripple: true },
+  { label: t('variantFilterFirst'), value: 'first', ripple: true },
+  { label: t('variantFilterLast'), value: 'last', ripple: true },
+  { label: 'A', value: 'a', ripple: true },
+  { label: 'B', value: 'b', ripple: true },
+  { label: 'C', value: 'c', ripple: true }
+]);
+const variantFilterLabel = computed(() => (
+  variantOptions.value.find((option) => option.value === variantFilter.value)?.label ?? ''
+));
 const columnCount = computed(() => discoveryColumnCount(containerWidth.value));
 const columnGap = computed(() => discoveryColumnGap(containerWidth.value));
 const columnWidth = computed(() => {
@@ -103,6 +115,11 @@ onBeforeUnmount(() => { observer?.disconnect(); resizeObserver?.disconnect(); pr
         <var-button outline :type="mode === 'covers' ? 'primary' : 'default'" :aria-pressed="mode === 'covers'" @click="mode = 'covers'">{{ t('discoveryCovers') }}</var-button>
       </var-button-group>
       <TagFilterControl v-model="filters" :categories="tags.categories" :category-style="categoryStyle" :counts="counts" />
+      <var-menu-select class="discovery-variant-menu" size="small" :model-value="variantFilter" :options="variantOptions" placement="bottom" :aria-label="t('discoveryVariants')" @update:model-value="variantFilter = $event">
+        <var-button class="query-filter-trigger discovery-variant-trigger" size="small" outline :aria-label="t('discoveryVariants')" :title="t('discoveryVariants')">
+          <span>{{ variantFilterLabel }}</span><MdiIcon class="filter-chevron" :path="mdiChevronDown" />
+        </var-button>
+      </var-menu-select>
       <var-button round text :aria-label="t('discoveryRefresh')" :title="t('discoveryRefresh')" @click="refresh"><MdiIcon :path="mdiRefresh" /></var-button>
     </header>
     <div ref="scrollRoot" class="discovery-scroll">
@@ -139,6 +156,8 @@ onBeforeUnmount(() => { observer?.disconnect(); resizeObserver?.disconnect(); pr
 .discovery-card:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .discovery-caption { display: block; padding: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .discovery-toolbar :deep(.var-button-group .var-button), .discovery-toolbar :deep(.query-filter-trigger) { height: 40px; font-size: 14px; }
+.discovery-variant-menu { display: inline-flex; flex: 0 0 auto; }
+.discovery-variant-menu :deep(.query-filter-trigger) { width: auto; }
 .discovery-more { text-align: center; padding: 16px; }
 .discovery-preview { display: block; max-width: 100%; max-height: 72dvh; margin: auto; object-fit: contain; }
 @media (max-width: 600px) {

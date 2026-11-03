@@ -1,7 +1,7 @@
 import { t } from '../../../../public/i18n.js';
 import { pagesAppCachePrefix, pagesLocalStorageKey, pagesOpfsDirectory } from '../../../../public/pages-assets-db.js';
 import { setReaderAssetUrlResolver } from '../../../../public/reader-model.js';
-import { normalizeVariantAssignments } from '../../../../public/variant-assignment-model.js';
+import { isValidEpisodeId, normalizeVariantAssignments, pruneEpisodeVariantTokens } from '../../../../public/variant-assignment-model.js';
 import { applyVariantAssignments } from '../../../../public/variant-assignments.js';
 import { portableLibrary, assertPortableJson } from '../../../../public/shared-export.js';
 import { assetStore, clearAssetStore, pruneAssets, storeAssetEntries } from './assets.js';
@@ -227,6 +227,34 @@ async function handleRequest(url, options = {}) {
     if (method !== 'POST') throw new Error(t('pagesUnavailable'));
     const { library } = await rescanDirectory();
     return { ok: true, library };
+  }
+  const episodeCleanMatch = url.match(/^\/api\/episodes\/([^/]+)\/clean$/);
+  if (episodeCleanMatch && method === 'POST') {
+    const episodeId = decodeURIComponent(episodeCleanMatch[1]);
+    if (!isValidEpisodeId(episodeId)) throw new Error(t('pagesUnavailable'));
+    if (await checkDirectoryAccess()) {
+      try { await rescanDirectory(); } catch { /* Keep the current index when the directory is unavailable. */ }
+    }
+    const next = structuredClone(state);
+    const episode = next.library.episodes?.[episodeId];
+    if (!episode) throw new Error(t('pagesUnavailable'));
+    const keptFiles = (episode.files ?? []).filter((file) => !file.missing);
+    const removed = (episode.files?.length ?? 0) - keptFiles.length;
+    episode.files = keptFiles;
+    next.variantAssignments = pruneEpisodeVariantTokens(
+      next.variantAssignments,
+      episodeId,
+      new Set(keptFiles.map((file) => file.assignmentToken).filter(Boolean))
+    );
+    next.library.warnings = (next.library.warnings ?? []).filter((warning) => warning.type !== 'ambiguous-variant-token');
+    applyVariantAssignments(next.library, next.variantAssignments, next.recognition.identityMarkers ?? []);
+    const saved = await persist(next);
+    const retained = new Set(['directory', 'directoryNamespace']);
+    for (const candidate of Object.values(saved.library.episodes)) {
+      for (const file of candidate.files ?? []) if (file.assetKey) retained.add(file.assetKey);
+    }
+    await pruneAssets(retained);
+    return { ok: true, removed, variantAssignments: saved.variantAssignments, library: saved.library };
   }
   if (url === '/api/variants' && method === 'GET') return { variantAssignments: structuredClone(state.variantAssignments) };
   if (url === '/api/export/json') {

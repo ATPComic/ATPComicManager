@@ -12,9 +12,10 @@ import { applyPlan } from './apply/apply.js';
 import { loadTagState, mergeTagStates, saveTagState } from './stores/tag-store.js';
 import { getThumbnailPath, previewCacheInfo } from './thumbnails/thumbnail-cache.js';
 import { loadVariantAssignments, saveVariantAssignments, alignVariantTokens } from './stores/variant-store.js';
-import { normalizeVariantAssignments } from '../public/variant-assignment-model.js';
+import { isValidEpisodeId, normalizeVariantAssignments, pruneEpisodeVariantTokens } from '../public/variant-assignment-model.js';
+import { applyVariantAssignments } from '../public/variant-assignments.js';
 import { loadRecognitionState, saveRecognitionState, mergeRecognitionStates } from './stores/recognition-store.js';
-import { loadSharedImport, normalizeSharedImport } from './stores/shared-import-store.js';
+import { loadSharedImport, normalizeSharedImport, saveSharedImport } from './stores/shared-import-store.js';
 import { initializeStorage } from './storage/initialize.js';
 import { withDatabase } from './storage/database.js';
 import { attachImageReferences, resolveImageReference } from './model/image-reference.js';
@@ -144,6 +145,62 @@ export async function startServer(config) {
     return shared ? mergeSharedLibrary(library, shared.library, recognition.identityMarkers) : library;
   }
 
+  async function cleanEpisodeFiles(episodeId) {
+    const recognition = await loadRecognitionState(config.databasePath);
+    const library = await loadLibrary();
+    const episode = library.episodes?.[episodeId];
+    if (!episode) return null;
+
+    const removedFiles = [];
+    const keptFiles = [];
+    for (const file of episode.files ?? []) {
+      if (file.missing || !file.absolutePath) {
+        removedFiles.push(file);
+        continue;
+      }
+      try {
+        await fs.access(file.absolutePath);
+        keptFiles.push(file);
+      } catch (error) {
+        if (error.code === 'ENOENT') removedFiles.push(file);
+        else keptFiles.push(file);
+      }
+    }
+    episode.files = keptFiles;
+
+    if (removedFiles.length) {
+      const removedNames = new Set(removedFiles.map((file) => file.name));
+      const shared = await loadSharedImport(config.databasePath);
+      const sharedFiles = shared?.library?.episodes?.[episodeId]?.files;
+      if (Array.isArray(sharedFiles)) {
+        const nextSharedFiles = sharedFiles.filter((file) => !removedNames.has(file.name));
+        if (nextSharedFiles.length !== sharedFiles.length) {
+          shared.library.episodes[episodeId].files = nextSharedFiles;
+          await saveSharedImport(config.databasePath, shared);
+        }
+      }
+    }
+
+    const validTokens = new Set(keptFiles.map((file) => file.assignmentToken).filter(Boolean));
+    const variants = pruneEpisodeVariantTokens(
+      await loadVariantAssignments(config.databasePath),
+      episodeId,
+      validTokens
+    );
+    await saveVariantAssignments(config.databasePath, variants);
+    const removedPaths = new Set(removedFiles.map((file) => file.relativePath).filter(Boolean));
+    library.warnings = library.warnings.filter((warning) => {
+      if (warning.type === 'ambiguous-variant-token') return false;
+      if (warning.episodeId !== episodeId) return true;
+      if (warning.type === 'missing-imported-image') return false;
+      if (removedPaths.has(warning.path)) return false;
+      return !(warning.relatedPaths ?? []).some((candidate) => removedPaths.has(candidate));
+    });
+    applyVariantAssignments(library, variants, recognition.identityMarkers);
+    await updateLibrary(library);
+    return { library, variantAssignments: variants, removed: removedFiles.length };
+  }
+
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url, `http://${request.headers.host}`);
@@ -208,6 +265,22 @@ export async function startServer(config) {
         const library = await scanLibrary();
         await updateLibrary(library);
         sendJson(response, 200, { ok: true, library });
+        return;
+      }
+
+      const episodeCleanMatch = url.pathname.match(/^\/api\/episodes\/([^/]+)\/clean$/);
+      if (episodeCleanMatch && request.method === 'POST') {
+        const episodeId = decodeURIComponent(episodeCleanMatch[1]);
+        if (!isValidEpisodeId(episodeId)) {
+          sendJson(response, 400, { error: 'Invalid episode ID' });
+          return;
+        }
+        const result = await cleanEpisodeFiles(episodeId);
+        if (!result) {
+          sendJson(response, 404, { error: 'Episode not found' });
+          return;
+        }
+        sendJson(response, 200, { ok: true, ...result });
         return;
       }
 

@@ -1,6 +1,8 @@
 import {
   DEFAULT_VARIANT_NAMES,
   compareVariantNames,
+  createEmptyVariantAssignments,
+  createVariantAssignmentDraft,
   findVariantAssignments,
   getEpisodeVariantNames,
   isSpecialVariantName,
@@ -94,4 +96,24 @@ export function applyVariantAssignments(library, input, identityMarkers = []) {
   }
 
   return library;
+}
+
+export function createDefaultVariantAssignmentDraft(library, episodeId, identityMarkers = []) {
+  const episode = library?.episodes?.[episodeId];
+  const emptyDraft = Object.fromEntries(DEFAULT_VARIANT_NAMES.map((variant) => [variant, []]));
+  if (!episode) return emptyDraft;
+  const scopedLibrary = {
+    episodes: {
+      [episodeId]: {
+        ...episode,
+        files: (episode.files ?? [])
+          .filter((file) => !file.missing)
+          .map((file) => ({ ...file }))
+      }
+    },
+    warnings: []
+  };
+  applyVariantAssignments(scopedLibrary, createEmptyVariantAssignments(), identityMarkers);
+  const draft = createVariantAssignmentDraft(createEmptyVariantAssignments(), scopedLibrary);
+  return draft.episodes[episodeId] ?? emptyDraft;
 }

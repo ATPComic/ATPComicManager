@@ -128,6 +128,66 @@ export function normalizeVariantAssignments(input) {
   return result;
 }
 
+export function clearEpisodeVariantAssignments(input, episodeId) {
+  const result = normalizeVariantAssignments(input);
+  if (!isValidEpisodeId(episodeId)) return result;
+  delete result.episodes[episodeId];
+  delete result.peekRelations[episodeId];
+  if (result.pageMappings) {
+    delete result.pageMappings[episodeId];
+    if (!Object.keys(result.pageMappings).length) {
+      delete result.pageMappings;
+      if (result.version === 4) result.version = 3;
+    }
+  }
+  return result;
+}
+
+export function pruneEpisodeVariantTokens(input, episodeId, validTokens) {
+  const result = normalizeVariantAssignments(input);
+  if (!isValidEpisodeId(episodeId) || !result.episodes[episodeId]) return result;
+  const tokens = new Set([...(validTokens ?? [])]
+    .map((token) => normalizeVariantToken(token))
+    .filter(Boolean));
+  const episode = result.episodes[episodeId];
+  for (const variant of Object.keys(episode)) {
+    episode[variant] = episode[variant].filter((token) => tokens.has(token));
+  }
+
+  const mappings = result.pageMappings?.[episodeId];
+  if (mappings) {
+    for (const variant of Object.keys(mappings)) {
+      if (!episode[variant]) {
+        delete mappings[variant];
+        continue;
+      }
+      for (const token of Object.keys(mappings[variant])) {
+        if (!episode[variant].includes(token)) delete mappings[variant][token];
+      }
+      if (!Object.keys(mappings[variant]).length) delete mappings[variant];
+    }
+    if (!Object.keys(mappings).length) {
+      delete result.pageMappings[episodeId];
+      if (!Object.keys(result.pageMappings).length) {
+        delete result.pageMappings;
+        if (result.version === 4) result.version = 3;
+      }
+    }
+  }
+
+  const populated = new Set(Object.entries(episode)
+    .filter(([, values]) => values.length)
+    .map(([variant]) => variant));
+  const relations = result.peekRelations[episodeId];
+  if (relations) {
+    for (const [source, target] of Object.entries(relations)) {
+      if (!populated.has(source) || (target !== null && !populated.has(target))) delete relations[source];
+    }
+    if (!Object.keys(relations).length) delete result.peekRelations[episodeId];
+  }
+  return result;
+}
+
 export function getVariantPageMapping(input, episodeId, variantValue, tokenValue) {
   const variant = normalizeVariantName(variantValue);
   const token = normalizeVariantToken(tokenValue);

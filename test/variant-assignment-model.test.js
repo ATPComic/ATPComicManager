@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import {
   addVariant,
   assignVariantToken,
+  clearEpisodeVariantAssignments,
   createVariantAssignmentDraft,
   findVariantAssignments,
   getEpisodeVariantNames,
   getVariantPageMapping,
   moveVariantToken,
   normalizeVariantAssignments,
+  pruneEpisodeVariantTokens,
   removeVariant,
   removeVariantToken,
   setVariantPageMapping
@@ -284,4 +286,99 @@ test('logical-page mapping helpers set and reset an explicit override', () => {
   assert.equal(reset.version, 3);
   assert.equal(getVariantPageMapping(reset, '20250401', 'a_sp1', 'a5_sp1'), null);
   assert.equal(Object.hasOwn(reset, 'pageMappings'), false);
+});
+
+test('clearing one episode removes only its assignments, Peek relations and page mappings', () => {
+  const cleared = clearEpisodeVariantAssignments({
+    version: 4,
+    episodes: {
+      '20250401': { a: ['a1'], b: [], c: [] },
+      '20250402': { a: [], b: ['b1'], c: [] }
+    },
+    peekRelations: {
+      '20250401': { a: 'b' },
+      '20250402': { b: null }
+    },
+    pageMappings: {
+      '20250401': { a: { a1: 4 } },
+      '20250402': { b: { b1: 2 } }
+    }
+  }, '20250401');
+
+  assert.deepEqual(cleared, {
+    version: 4,
+    episodes: {
+      '20250402': { a: [], b: ['b1'], c: [] }
+    },
+    peekRelations: {
+      '20250402': { b: null }
+    },
+    pageMappings: {
+      '20250402': { b: { b1: 2 } }
+    }
+  });
+});
+
+test('clearing the last mapped episode drops pageMappings and version 4', () => {
+  const cleared = clearEpisodeVariantAssignments({
+    version: 4,
+    episodes: { '20250401': { a: ['a1'], b: [], c: [] } },
+    peekRelations: { '20250401': { a: 'b' } },
+    pageMappings: { '20250401': { a: { a1: 4 } } }
+  }, '20250401');
+
+  assert.deepEqual(cleared, {
+    version: 3,
+    episodes: {},
+    peekRelations: {}
+  });
+  assert.equal(Object.hasOwn(cleared, 'pageMappings'), false);
+});
+
+test('pruning an episode drops tokens, mappings and relations for missing files', () => {
+  const pruned = pruneEpisodeVariantTokens({
+    version: 4,
+    episodes: {
+      '20250401': { a: ['a1', 'a2'], b: ['b1'], c: [], d: ['d1'] }
+    },
+    peekRelations: {
+      '20250401': { a: 'b', c: null, d: 'a' }
+    },
+    pageMappings: {
+      '20250401': {
+        a: { a1: 2, a2: 3 },
+        b: { b1: 4 },
+        d: { d1: 5 }
+      }
+    }
+  }, '20250401', ['a1', 'b1']);
+
+  assert.deepEqual(pruned, {
+    version: 4,
+    episodes: {
+      '20250401': { a: ['a1'], b: ['b1'], c: [], d: [] }
+    },
+    peekRelations: {
+      '20250401': { a: 'b' }
+    },
+    pageMappings: {
+      '20250401': { a: { a1: 2 }, b: { b1: 4 } }
+    }
+  });
+});
+
+test('pruning the last mapped episode drops pageMappings and version 4', () => {
+  const pruned = pruneEpisodeVariantTokens({
+    version: 4,
+    episodes: { '20250401': { a: ['a1'], b: [], c: [] } },
+    peekRelations: { '20250401': { a: 'b' } },
+    pageMappings: { '20250401': { a: { a1: 2 } } }
+  }, '20250401', []);
+
+  assert.deepEqual(pruned, {
+    version: 3,
+    episodes: { '20250401': { a: [], b: [], c: [] } },
+    peekRelations: {}
+  });
+  assert.equal(Object.hasOwn(pruned, 'pageMappings'), false);
 });

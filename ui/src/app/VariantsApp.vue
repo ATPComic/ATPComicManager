@@ -2,7 +2,7 @@
 import PageSkeleton from '../components/PageSkeleton.vue';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { Dialog, Snackbar } from '@varlet/ui';
-import { mdiArrowRight, mdiChevronLeft, mdiContentSaveOutline, mdiDeleteOutline, mdiDragVertical, mdiImageOutline, mdiPencilOutline, mdiPlus, mdiRefresh, mdiRestore, mdiTuneVariant } from '../lib/icons.js';
+import { mdiArrowRight, mdiChevronLeft, mdiContentSaveOutline, mdiDeleteOutline, mdiDragVertical, mdiFolderRefreshOutline, mdiImageOutline, mdiPencilOutline, mdiPlus, mdiRefresh, mdiRestore, mdiTuneVariant } from '../lib/icons.js';
 import MdiIcon from '../components/MdiIcon.vue';
 import SettingsMenu from '../components/SettingsMenu.vue';
 import { isPagesApp, requestJson } from '../services/api.js';
@@ -16,6 +16,7 @@ import {
   DEFAULT_VARIANT_NAMES,
   addVariant,
   assignVariantToken,
+  clearEpisodeVariantAssignments,
   createEmptyVariantAssignments,
   createVariantAssignmentDraft,
   findVariantAssignments,
@@ -29,10 +30,13 @@ import {
   removeVariantToken,
   setVariantPageMapping
 } from '../../../public/variant-assignment-model.js';
+import { createDefaultVariantAssignmentDraft } from '../../../public/variant-assignments.js';
 
 const state = reactive({
   library: { episodes: {}, warnings: [] },
   assignments: createEmptyVariantAssignments(),
+  recognition: { identityMarkers: [] },
+  defaultEpisodes: {},
   selectedEpisodeId: null,
   busy: false,
   draggedToken: null,
@@ -387,6 +391,41 @@ async function deleteEmptyVariant(variant) {
   state.assignments = cloneData(normalizeVariantAssignments(state.assignments));
 }
 
+function episodeAssignmentSignature(episodeId) {
+  return JSON.stringify({
+    episode: state.assignments.episodes[episodeId] ?? null,
+    relations: state.assignments.peekRelations?.[episodeId] ?? null,
+    pageMappings: state.assignments.pageMappings?.[episodeId] ?? null
+  });
+}
+
+async function resetEpisodeAssignments() {
+  const episodeId = state.selectedEpisodeId;
+  if (!episodeId || state.busy) return;
+  const action = await Dialog({
+    title: t('resetEpisodeAssignments'),
+    message: t('resetEpisodeAssignmentsConfirm', {
+      episode: state.library.episodes[episodeId]?.title ?? episodeId
+    }),
+    cancelButton: true,
+    confirmButtonText: t('resetEpisodeAssignments')
+  });
+  if (action !== 'confirm') return;
+
+  const defaults = createDefaultVariantAssignmentDraft(
+    state.library,
+    episodeId,
+    state.recognition?.identityMarkers ?? []
+  );
+  const next = clearEpisodeVariantAssignments(state.assignments, episodeId);
+  next.episodes[episodeId] = defaults;
+  state.assignments = normalizeVariantAssignments(next);
+  state.defaultEpisodes[episodeId] = episodeAssignmentSignature(episodeId);
+  clearDrag();
+  clearTouchSelection();
+  Snackbar.success({ content: t('resetEpisodeAssignmentsDone'), position: 'bottom' });
+}
+
 function clearDrag() {
   state.draggedToken = null;
   state.draggedSourceVariant = null;
@@ -398,10 +437,12 @@ async function loadState() {
   const scan = await requestJson('/api/scan', { method: 'POST' });
   const payload = await requestJson('/api/state');
   state.library = scan.library ?? payload.library ?? state.library;
+  state.recognition = payload.recognition ?? state.recognition;
   state.assignments = cloneData(createVariantAssignmentDraft(
     payload.variantAssignments ?? createEmptyVariantAssignments(),
     state.library
   ));
+  state.defaultEpisodes = {};
   if (initialEpisodeId && episodeIds.value.includes(initialEpisodeId)) state.selectedEpisodeId = initialEpisodeId;
   else if (!episodeIds.value.includes(state.selectedEpisodeId)) state.selectedEpisodeId = episodeIds.value[0] ?? null;
   edits.markSaved();
@@ -416,9 +457,39 @@ async function rescan() {
     const variants = await requestJson('/api/variants');
     state.library = payload.library ?? state.library;
     state.assignments = cloneData(createVariantAssignmentDraft(variants.variantAssignments, state.library));
+    state.defaultEpisodes = {};
     edits.markSaved();
     if (!episodeIds.value.includes(state.selectedEpisodeId)) state.selectedEpisodeId = episodeIds.value[0] ?? null;
     Snackbar.success({ content: t('scanDone'), position: 'bottom' });
+  } catch (error) {
+    Snackbar.error({ content: error.message, position: 'bottom' });
+  } finally {
+    state.busy = false;
+  }
+}
+
+async function cleanEpisodeFiles() {
+  const episodeId = state.selectedEpisodeId;
+  if (!episodeId || state.busy) return;
+  const action = await Dialog({
+    title: t('cleanMissingFiles'),
+    message: t('cleanMissingFilesConfirm', {
+      episode: state.library.episodes[episodeId]?.title ?? episodeId
+    }),
+    cancelButton: true,
+    confirmButtonText: t('cleanMissingFiles')
+  });
+  if (action !== 'confirm') return;
+  if (!await edits.permitLeave()) return;
+  state.busy = true;
+  try {
+    const payload = await requestJson(`/api/episodes/${encodeURIComponent(episodeId)}/clean`, { method: 'POST' });
+    state.library = payload.library;
+    state.assignments = cloneData(createVariantAssignmentDraft(payload.variantAssignments, state.library));
+    state.defaultEpisodes = {};
+    edits.markSaved();
+    if (!episodeIds.value.includes(state.selectedEpisodeId)) state.selectedEpisodeId = episodeIds.value[0] ?? null;
+    Snackbar.success({ content: t('cleanMissingFilesDone'), position: 'bottom' });
   } catch (error) {
     Snackbar.error({ content: error.message, position: 'bottom' });
   } finally {
@@ -430,12 +501,19 @@ async function saveAssignments() {
   if (state.busy) return;
   state.busy = true;
   try {
+    let assignments = normalizeVariantAssignments(state.assignments);
+    for (const [episodeId, signature] of Object.entries(state.defaultEpisodes)) {
+      if (signature === episodeAssignmentSignature(episodeId)) {
+        assignments = clearEpisodeVariantAssignments(assignments, episodeId);
+      }
+    }
     const payload = await requestJson('/api/variants', {
       method: 'PUT',
-      body: JSON.stringify(normalizeVariantAssignments(state.assignments))
+      body: JSON.stringify(assignments)
     });
     state.library = payload.library;
     state.assignments = cloneData(createVariantAssignmentDraft(payload.variantAssignments, state.library));
+    state.defaultEpisodes = {};
     edits.markSaved();
     Snackbar.success({ content: t('variantAssignmentsSaved'), position: 'bottom' });
     return true;
@@ -523,6 +601,8 @@ onMounted(async () => {
           <div v-if="activeEpisode" class="variant-board-actions">
             <span class="muted">{{ t('manualFileCount', { count: activeFiles.length }) }}</span>
             <var-button size="small" text @click="viewEpisodeInLibrary"><MdiIcon :path="mdiImageOutline" />{{ t('viewEpisodeInLibrary') }}</var-button>
+            <var-button size="small" text @click="cleanEpisodeFiles"><MdiIcon :path="mdiFolderRefreshOutline" />{{ t('cleanMissingFiles') }}</var-button>
+            <var-button size="small" text @click="resetEpisodeAssignments"><MdiIcon :path="mdiRestore" />{{ t('resetEpisodeAssignments') }}</var-button>
             <var-button size="small" outline @click="openAddVariantDialog"><MdiIcon :path="mdiPlus" />{{ t('addVariant') }}</var-button>
           </div>
         </header>
